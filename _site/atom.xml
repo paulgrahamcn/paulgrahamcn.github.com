@@ -4,21 +4,13 @@
  <title>PaulGraham中文</title>
  <link href="http://paulgrahamcn.github.com/atom.xml" rel="self"/>
  <link href="http://paulgrahamcn.github.com"/>
- <updated>2012-10-18T21:09:37+08:00</updated>
+ <updated>2012-10-19T21:00:38+08:00</updated>
  <id>http://paulgrahamcn.github.com</id>
  <author>
    <name>Name Lastname</name>
    <email>blah@email.test</email>
  </author>
 
- 
- <entry>
-   <title>hello</title>
-   <link href="http://paulgrahamcn.github.com/2012/10/18/hello"/>
-   <updated>2012-10-18T00:00:00+08:00</updated>
-   <id>http://paulgrahamcn.github.com/2012/10/18/hello</id>
-   <content type="html"></content>
- </entry>
  
  
 </feed>

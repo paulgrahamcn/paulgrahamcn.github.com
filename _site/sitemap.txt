@@ -7,5 +7,4 @@ http://paulgrahamcn.github.com/archive.html
 http://paulgrahamcn.github.com/tags.html
 http://paulgrahamcn.github.com/atom.xml
 http://paulgrahamcn.github.com/sitemap.txt
-
-http://paulgrahamcn.github.com/2012/10/18/hello
+http://paulgrahamcn.github.com/better.html
