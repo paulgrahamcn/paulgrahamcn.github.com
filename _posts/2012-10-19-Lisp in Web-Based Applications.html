@@ -1,0 +1,485 @@
+﻿---
+layout: post
+title: "互联网程序中的lisp"
+description: ""
+category:essays
+tags: [文章列表]
+---
+{% include JB/setup %}
+
+互联网程序中的lisp
+摘录自2001年4月在剑桥，MA的BBNlabs所作演讲
+
+你想要的语言
+
+使用lisp写互联网程序的原因之一是你“可以”使用lisp。
+当你写一个仅仅运行在你自己服务器上的程序时，
+你可以使用任何你想要的语言
+
+很长一段时间程序员没有很多的关于
+编写应用程序语言的选择。直到最近，
+编写应用程序意味着编写运行在桌面电脑上的软件。
+关于桌面软件，有一种强烈的偏见，
+使用与操作系统相同的语言编写程序。
+十年前，所有应用程序用C写的。
+
+基于Web的应用中，这种情况改变了。你控制了服务器，
+你可以用任何你想要的语言写软件。你可以
+想当然地认为，你拥有操作系统和编译器的源代码。
+如果在语言和操作系统中间出了问题，您可以自己修复。
+
+然而新的自由是一把双刃剑。多种选择意味着你必须做选择。
+在以前这很容易。如果你负责一个软件项目，一些讨厌的人建议你使用
+以前从不使用的语言来写软件，你可能告诉他们，那行不通；然后就结束了。
+
+在互联网时代，一切都变了。你现在服从了市场的力量，来选择语言。
+如果你假装任何东西都没有改变，像我们的竞争对手一样，使用c/c++，
+那你就是在准备被抛弃。小创业公司，只有使用更强大的语言才能制胜。
+
+渐进开发
+
+lisp有一定的开发风格。它的传统之一是渐进式的发展：尽快写一个不做任何事情的程序。
+然后逐渐增加功能，但是每次你都有可以工作的代码。
+
+我觉得这种方式让你获得更好的软件，写的速度更快。
+Lisp的所有东西都调整为这种方式，因为Lisp程序员这样工作了至少30年。
+
+Viaweb编辑器是一个极端的渐进开发的产物。
+它从一个120行的程序开始，这个程序是我在刚刚写完的一本书里的一个例子，就在开始viaweb之前。
+Viaweb编辑器最终成长为有约25,000行代码，基于这个程序逐步增长的。
+我从来坐下来，改写整个代码。
+我不认为我有超过一两天不运行代码。
+整个开发过程是一个逐渐变化的长期系列。
+
+这种风格非常符合的网络程序的滚动发行。
+这也是一个更快的泛型编程的方法。
+
+互动的toplevel
+
+Lisp的互动toplevel有助于快速开发软件。
+但对我们，它最大的优势可能是在寻找bug上。
+正如我以前所说，在网络程序中，你有用户数据在服务器上，经常可以重现bug。
+
+当客服的人带了一个编辑器的bug来找我，我会把Lisp代码装入解释器中，登入用户账号。
+如果我能重现bug，我会中断循环，看到到底哪里出错了。
+我经常可以很快修复，并发布一个修复补丁。
+当我说马上，我的意思是，用户还在手机那头。
+
+这种快速修复bug的方式把我们放到了一个诱人位置。
+如果我们能够快速找到和修正bug，而用户仍在手机那头，
+我们给用户的印象是，他们在想象问题。所以我们有时对客服讲，让用户重新登录，看是否还有问题。
+当用户重新登录，当然他们会得到新发布版本，bug修复了，一切工作的都很好。
+我意识到这有点“卑鄙”，但这也很有趣。
+
+HTML宏
+
+Lisp的宏是我们的另一制胜点。我们在viaweb编辑器中广泛的使用这点。
+它可以准确地被描述为一个“大宏”。这告诉你，我们有多依赖lisp，
+因为没有其他的语言在有这样的宏就像lisp中那样。
+
+我们使用宏的目的之一就是生成HTML。在宏和lisp之间有种天然的默契，
+因为HTML是一个前缀表达式就像Lisp，HTML是递归的，就象Lisp。
+因此，我们在宏调用中调用宏，生成最复杂的HTML，并且仍然可控。
+
+嵌入语言
+
+我们使用宏的另一大用途是嵌入语言，称为Rtml。
+（我们做了各种解释，Rtml代表什么，但实际上我是这样命名的，Robert Morris, the Other founder of Viaweb, whose username is Rtm.）
+
+我们软件的每一页面都是由RTML写的程序生成的。
+我们把这些程序称为模版，来让它没那么吓人，但它们真的是程序。
+事实上，他们的Lisp程序。 
+Rtml是一个宏和内置的Lisp操作符的组合。
+
+用户可以编写自己的Rtml模板来描述他们期望的网页。
+我们有一个结构编辑器，操纵这些模板，很像在interlisp中的结构化编辑器。
+不是自由的写字，而是把代码剪切和粘贴在一起。
+这意味着，不可能得到语法错误。
+这也意味着，我们没有要显示在底层的S-表达式的括号：我们可以通过缩进来显示。
+通过这种方式，我们让这门语言没那么吓人。
+
+我们设计Rtml，让它没有运行时错误：
+每个Rtml程序生成一些网页，你可以调试，直到生成你想要的。
+
+最初，我们希望我们的用户是网站顾问，我们他们多多使用Rtml。
+我们提供了一些默认模板，包含一些分块和物品等，
+目的是用户可以使用，修改，来生成它们想要的页面。
+
+事实变成网络顾问不喜欢Viaweb。
+顾问，作为常识，喜欢使用客户很难使用的产品，这可以保证他们可以被持续雇佣。
+顾问来到我们的网站，我们的网站会说，我们的软件是很容易使用，
+它会让任何人在五分钟内建立网上商店，他们会说，我们不可能使用它。
+因此，顾问对我们没兴趣。相反，所有用户都是最终用户，自身就是技工。
+他们喜欢控制自己的网站。这种用户不想做任何编程。他们只用了默认的模板。
+
+所以Rtml最终没有称为程序的主界面。
+它最终扮演了两个角色。首先，对于老练的用户，它是一个逃生阀，
+他们想要内置模板无法提供的东西。做viaweb的过程中，有人给了我一个非常有用的意见，
+用户始终想要升级的路线，即使他们永远不会采用。
+rtml是我们的升级路线。如果你想，你可以绝对控制您的网页上的一切。
+
+几百个用户中只有一个会去写自己的模板。这就让Rtml有第二个优势。
+通过查看在这些用户如何修改内置模板的，我们就可以知道我们需要添加什么给他们。
+我们最终目标是没有人使用Rtml。我们的内置模板应该做人们想要的一切。
+使用这种新的方法，Rtml担任警告标志，软件中我们还缺什么。
+
+Rtml第三，同时也是最大的优势是我们从中获得的优势。
+即使我们是唯一使用Rtml的人，它也会非常值得这样写。
+这个抽象层，让我跟竞争对手相比很有优势。
+首先，它使我们软件的设计干净许多。
+相对于使用C或Perl代码生成网页，就像我们的竞争对手那样，
+我们有一个高层次的语言来生成网页，页面样式也在其中指定。
+它使得代码更干净，更容易修改。
+我已经提到网络程序是通过一列小的修改来发布的。
+当你这样做时，你想知道，这样的修改的严重性。
+把你的代码分层设计，你可以更好的处理。
+底层修改（Rtml本身）是一个严重的问题，很少进行，
+思考很多。修改上层（模板代码），你就可以快速进行，不必担心太多后果。
+
+Rtml是一个非常像Lisp东西。主要由Lisp宏组成。在线编辑器在背后是S-表达式。
+当人们运行模板时，模板就被编译成lisp函数。
+
+Rtml甚至在很大程度上依赖于关键字参数，我一直认为那是Common Lisp有力的特性之一。
+由于网络软件的发布方式，你必须把软件设计为很容易修改。
+Rtml本身很容易修改，就像该软件的其他部分一样。
+Rtml大多操作符被设计为采用关键字参数，那帮了我们很大忙。
+如果我要添加一个操作符的行为方式，只添加一个新的关键字参数，
+现有的模板仍然可用。少数的Rtml操作符没有采取关键字参数，
+因为我没想到会改变他们，可是几乎最后我都会恨自己。
+如果可以从头再来，我想修改的事情之一是，我会让一切rtml操作符采用关键字参数。
+
+事实上，我们在编辑器里嵌入了好几门其他语言。
+另一个是描述图片的，我们没有暴露给用户。 
+viaweb包含图像生成器，由C写的，接收一个图像的描述，创建图像，
+并返回URL。我们也是使用S-表达式来描述这些图像。
+
+闭包模拟子例程
+
+使用网页作为UI的问题之一，是天生的无状态Web会话。
+我们使用词法闭包来模拟子例程行为。
+如果你明白延续，一种解释我们所作事情的方法是说，
+我们以延续传递风格写软件。
+
+当大多数网络软件生成页面上的链接时，往往在想，
+如果用户点击这个链接，我要调用这个cgi脚本，使用这些参数。
+而我们的软件生成链接时，会想，如果用户点击这个链接，我想运行这段代码。
+一段代码可以任意一段代码，可能（事实上，通常情况下）包含任意变量，从上下文获取值。
+
+我们是通过宏来这样做的，初始参数是个闭包。
+代码之后会使用一个唯一ID存储在全局哈希表中，
+代码的输出会出现在link的url中，其中包含了哈希key。
+如果链接被点击，我们的软件会找到和调用相应的代码，然后继续下去。
+我们飞快地编写了CGI脚本，除了他们是闭包，引用了其上下文。
+
+到目前为止，这听起来很空洞，所以让我给你举个例子，
+感受一下这种技术的明显不同。网络然间中经常要做的事情之一是，
+要编辑带有很多属性的对象。多数属性都可以表示为表单域或菜单。
+例如，如果你编辑的对象代表一个人，你可能得到一个域：名字，
+一个菜单选择：职称，等等。
+
+现在，有些对象有Color属性，怎么办？
+如果使用普通的CGI脚本，所有这些属性都在一个表单中，
+底部有个Update按钮，那么你将会很难过。
+你可以使用一个文本字段，让用户键入一个RGB值，
+但最终用户不喜欢这样。
+或者你有个菜单，包含了可能的颜色，但你必须限制颜色的数量，
+或提供标准的colormap，那么你需要256个菜单项，使用不重复的名字。
+
+我们在Viaweb能够做到的是，显示一个颜色，作为样本来代表当前值，
+其次是一个按钮，“修改”。如果用户点击“修改”按钮，
+他们就会来到有imagemap页面中，进行选择。
+选择后，他们会回到编辑对象属性的页面，颜色也变了。
+这就是我说的模拟子例程行为。
+该软件表现为选择一个颜色回来。当然不是这样；
+它是一个新的CGI调用看起来就像回到了堆栈上层。
+但通过使用闭包，我们可以使得，对于用户，对于我们，
+它看起来就像做了一个子例程调用。我们可以这样写代码，
+如果用户点击了链接，去颜色选择页面，然后再回来这。
+这只是一个地方，我们使用了这种技术。
+它使我们的软件看起来比竞争对手更复杂。
+
+Lisp in Web-Based Applications
+Paul Graham
+
+(This is an excerpt of a talk given at BBN Labs in Cambridge, MA, in
+April 2001.)
+
+Any Language You Want
+
+One of the reasons to use Lisp in writing Web-based applications
+is that you *can* use Lisp.  When you're writing software that is
+only going to run on your own servers, you can use whatever language
+you want.
+
+For a long time programmers didn't have a lot of choice about what
+language to use for writing application programs.  Until recently,
+writing application programs meant writing software to run on
+desktop computers.  In desktop software there was a strong bias
+toward writing the application in the same language as the operating
+system.  Ten years ago, for all practical purposes, applications
+were written in C.
+
+With Web-based applications, that changes.  You control the servers,
+and you can write your software in any language you want.  You can
+take it for granted now that you have the source code of both your
+operating system and your compilers.  If there does turn out to be
+any kind of problem between the language and the OS, you can fix
+it yourself.
+
+This new freedom is a double-edged sword, however.  Having more
+choices means that you now have to think about which choice to
+make.  It was easier in the old days.  If you were in charge of a
+software project, and some troublesome person suggested writing
+the software in a different language from whatever you usually
+used, you could just tell them that it would be impractical, and
+that would be the end of it.
+
+Now, with server-based applications, everything is changed.  You're
+now subject to market forces in what language you choose.  If you
+try to pretend that nothing has changed, and just use C and C++,
+like most of our competitors did, you are setting yourself up for
+a fall.  A little startup using a more powerful language will eat
+your lunch.
+
+Incremental Development
+
+There is a certain style of software development associated with
+Lisp.  One of its traditions is incremental development:  you start
+by writing, as quickly as possible, a program that does almost
+nothing.  Then you gradually add features to it, but at every step
+you have working code.
+
+I think this way you get better software, written faster.  Everything
+about Lisp is tuned to this style of programming, because Lisp
+programmers have worked this way for at least thirty years.
+
+The Viaweb editor must be one of the most extreme cases of incremental
+development.  It began with a 120-line program for generating Web
+sites that I had used in an example in a book that I finished just
+before we started Viaweb.  The Viaweb editor, which eventually grew
+to be about 25,000 lines of code, grew incrementally from this
+program.  I never once sat down and rewrote the whole thing.  I
+don't think I was ever more than a day or two without running code.
+The whole development process was one long series of gradual changes.
+
+This style of development fits well with the rolling releases that
+are possible with Web-based software.  It's also a faster way to
+get software written generally.
+
+
+Interactive Toplevel
+
+Lisp's interactive toplevel is a great help in developing software
+rapidly.  But the biggest advantage for us was probably in finding
+bugs.  As I mentioned before, with Web-based applications you have
+the users' data on your servers and can usually reproduce bugs.
+
+When one of the customer support people came to me with a report
+of a bug in the editor, I would load the code into the Lisp
+interpreter and log into the user's account.  If I was able to
+reproduce the bug I'd get an actual break loop, telling me exactly
+what was going wrong.  Often I could fix the code and release a
+fix right away.  And when I say right away, I mean while the user
+was still on the phone.
+
+Such fast turnaround on bug fixes put us into an impossibly tempting
+position.  If we could catch and fix a bug while the user was still
+on the phone, it was very tempting for us to give the user the
+impression that they were imagining it.  And so we sometimes (to
+their delight) had the customer support people tell the user to
+just try logging in again and see if they still had the problem.
+And of course when the user logged back in they'd get the newly
+released version of the software with the bug fixed, and everything
+would work fine.  I realize this was a bit sneaky of us, but it
+was also a lot of fun.
+
+
+Macros for Html
+
+Lisp macros were another big win for us.  We used them very
+extensively in the Viaweb editor.  It could accurately be described
+as one big macro.  And that gives you an idea of how much we depended
+on Lisp, because no other language has macros in the sense that
+Lisp does.
+
+One way we used macros was to generate Html.  There is a very
+natural fit between macros and Html, because Html is a prefix
+notation like Lisp, and Html is recursive like Lisp.  So we had
+macro calls within macro calls, generating the most complicated
+Html, and it was all still very manageable.
+
+
+Embedded Languages
+
+Another big use for macros was the embedded language we had for
+describing pages, called Rtml.  (We made up various explanations
+for what Rtml was supposed to stand for, but actually I named it
+after Robert Morris, the other founder of Viaweb, whose username
+is Rtm.)
+
+Every page made by our software was generated by a program written
+in Rtml.  We called these programs templates to make them less
+frightening, but they were real programs.  In fact, they were Lisp
+programs.  Rtml was a combination of macros and the built-in Lisp
+operators.
+
+Users could write their own Rtml templates to describe what they
+wanted their pages to look like.  We had a structure editor for
+manipulating these templates, a lot like the structure editor they
+had in Interlisp.  Instead of typing free-form text, you cut and
+pasted bits of code together.  This meant that it was impossible
+to get syntax errors.  It also meant that we didn't have to display
+the parentheses in the underlying s-expressions:  we could show
+structure by indentation.  By this means we made the language look
+a lot less threatening.
+
+We also designed Rtml so that there could be no errors at runtime:
+every Rtml program yielded some kind of Web page, and you could
+debug it by hacking it until it produced the page you meant it to.
+
+Initially we expected our users to be Web consultants, and we
+expected them to use Rtml a lot.  We provided some default templates
+for section pages and item pages and so on, and the idea was that
+the users could take them and modify them to make whatever pages
+they wanted.
+
+In fact it turned out that Web consultants didn't like Viaweb.
+Consultants, as a general rule, like to use products that are too
+hard for their clients to use, because it guarantees them ongoing
+employment.  Consultants would come to our Web site, which said
+all over it that our software was so easy to use that it would let
+anyone make an online store in five minutes, and they'd say, there's
+no way we're using that.  So we didn't get a lot of interest from
+Web consultants.  Instead the users all tended to be end-users,
+the actual merchants themselves.  They loved the idea of being in
+control of their own Web sites.  And this kind of user did not want
+to do any kind of programming.  They just used the default templates.
+
+So Rtml didn't end up being the main interface to the program.  It
+ended up playing two roles.  First of all, it was an escape valve
+for the really sophisticated users, who wanted something our built-in
+templates couldn't provide.  Somewhere in the course of doing
+Viaweb, someone gave me a very useful piece of advice: users always
+want an upgrade path, even though as a rule they'll never take it.
+Rtml was our upgrade path.  If you wanted to, you could get absolute
+control over everything on your pages.
+
+Only one out of every couple hundred users actually wrote their
+own templates.  And this led to the second advantage of Rtml.  By
+looking at the way these users modified our built-in templates, we
+knew what we needed to add to them.  Eventually we made it our goal
+that no one should ever have to use Rtml.  Our built-in templates
+should do everything people wanted.  In this new approach, Rtml
+served us as a warning sign that something was missing in our
+software.
+
+The third and biggest win from using Rtml was the advantage we
+ourselves got from it.  Even if we had been the only people who
+used Rtml, it would have been very much worth while writing the
+software that way.  Having that extra layer of abstraction in our
+software gave us a big advantage over competitors.  It made the
+design of our software much cleaner, for one thing.  Instead of
+just having bits of actual C or Perl code that generated our Web
+pages, like our competitors, we had a very high-level language for
+generating Web pages, and our page styles specified in that.  It
+made the code much cleaner and easier to modify.  I've already
+mentioned that Web-based applications get released as a series of
+many small modifications.  When you do that you want to be able to
+know how serious any given modification is.  By dividing your code
+into layers, you get a better handle on this.  Modifying stuff in
+lower layers (Rtml itself) was a serious matter to be done rarely,
+and after much thought.  Whereas modifying the top layers (template
+code) was something you could do quickly without worrying too much
+about the consequences.
+
+Rtml was a very Lispy proposition.  It was mostly Lisp macros, to
+start with.  The online editor was, behind the scenes, manipulating
+s-expressions.  And when people ran templates, they got compiled
+into Lisp functions by calling compile at runtime.
+
+Rtml even depended heavily on keyword parameters, which up to that
+time I had always considered one of the more dubious features of
+Common Lisp.  Because of the way Web-based software gets released,
+you have to design the software so that it's easy to change.  And
+Rtml itself had to be easy to change, just like any other part of
+the software.  Most of the operators in Rtml were designed to take
+keyword parameters, and what a help that turned out to be.  If I
+wanted to add another dimension to the behavior of one of the
+operators, I could just add a new keyword parameter, and everyone's
+existing templates would continue to work.  A few of the Rtml
+operators didn't take keyword parameters, because I didn't think
+I'd ever need to change them, and almost every one I ended up
+kicking myself about later.  If I could go back and start over from
+scratch, one of the things I'd change would be that I'd make every
+Rtml operator take keyword parameters.
+
+We had a couple embedded languages within the editor, in fact.
+Another one, which we didn't expose directly to the users, was for
+describing images.  Viaweb included an image generator, written in
+C, that could take a description of an image, create that image,
+and return its url.  We used s-expressions to describe these images
+as well.
+
+
+Closures Simulate Subroutines
+
+One of the problems with using Web pages as a UI is the inherent
+statelessness of Web sessions.  We got around this by using lexical
+closures to simulate subroutine-like behavior.  If you understand
+about continuations, one way to explain what we did would be to
+say that we wrote our software in continuation-passing style.
+
+When most web-based software generates a link on a page, it tends
+to be thinking, if the user clicks on this link, I want to call
+this cgi script with these arguments.  When our software generated
+a link, it could think, if the user clicks on this link, I want to
+run this piece of code.  And the piece of code could an arbitrary
+piece of code, possibly (in fact, usually) containing free variables
+whose value came from the surrounding context.
+
+The way we did this was to write a macro that took an initial
+argument expected to be a closure, followed by a body of code.
+The code would then get stored in a global hash table under a unique
+id, and whatever output was generated by the code in the body would
+appear within a link whose url contained that hash key.  If that
+link was the next one clicked on, our software would find and call
+the corresponding bit of code, and the chain would continue.
+Effectively we were writing cgi scripts on the fly, except that
+they were closures that could refer to the surrounding context.
+
+So far this sounds very theoretical, so let me give you an example
+of where this technique made an obvious difference.  One of the
+things you often want to do in Web-based applications is edit an
+object with various types of properties.  Many of the properties
+of an object can be represented as form fields or menus.  If you're
+editing an object representing a person, for example, you might
+get a field, for their name, a menu choice for their title, and so
+on.
+
+Now what happens when some object has a property that is a color?
+If you use ordinary cgi scripts, where everything has to happen on
+one form, with an Update button at the bottom, you are going to
+have a hard time.  You could use a text field and make the user
+type an rgb number into it, but end-users don't like that.  Or you
+could have a menu of possible colors, but then you have to limit
+the possible colors, or otherwise even to offer just the standard
+Web colormap, you'd need 256 menu items with barely distinguishable
+names.
+
+What we were able to do, in Viaweb, was display a color as a swatch
+representing the current value, followed by a button that said
+"Change."  If the user clicked on the Change button they'd go to
+a page with an imagemap of colors to choose among.  And after they
+chose a color, they'd be back on the page where they were editing
+the object's properties, with that color changed.  This is what I
+mean about simulating subroutine-like behavior.  The software could
+behave as if it were returning from having chosen a color.  It
+wasn't, of course; it was making a new cgi call that looked like
+going back up a stack.  But by using closures, we could make it
+look to the user, and to ourselves, as if we were just doing a
+subroutine call.  We could write the code to say, if the user clicks
+on this link, go to the color selection page, and then come back
+here.  This was just one of the places were we took advantage of
+this possibility.  It made our software visibly more sophisticated
+than that of our competitors.
+
