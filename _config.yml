@@ -11,7 +11,7 @@ pygments: true
 #
 title : PaulGraham中文
 tagline: Site Tagline
-author :
+author : false
   name : Name Lastname
   email : blah@email.test
   github : username
