@@ -4,3 +4,11 @@ title: 其它相关
 ---
 {% include JB/setup %}
 
+{% for tag in site.tags %} 
+  {% if tag[0] == "relate" %}
+  <ul>
+    {% assign pages_list = tag[1] %}  
+    {% include JB/pages_list %}
+  </ul>
+  {% endif %}
+{% endfor %}

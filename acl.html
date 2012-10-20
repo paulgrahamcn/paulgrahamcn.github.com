@@ -4,3 +4,11 @@ title: ANSI Common Lisp
 ---
 {% include JB/setup %}
 
+{% for tag in site.tags %} 
+  {% if tag[0] == "acl" %}
+  <ul>
+    {% assign pages_list = tag[1] %}  
+    {% include JB/pages_list %}
+  </ul>
+  {% endif %}
+{% endfor %}

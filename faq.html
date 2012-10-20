@@ -3,3 +3,12 @@ layout: page
 title: FAQs
 ---
 {% include JB/setup %}
+
+{% for tag in site.tags %} 
+  {% if tag[0] == "faq" %}
+  <ul>
+    {% assign pages_list = tag[1] %}  
+    {% include JB/pages_list %}
+  </ul>
+  {% endif %}
+{% endfor %}

@@ -10,13 +10,13 @@ pygments: true
 # so be sure to set them if your theme uses them.
 #
 title : PaulGraham中文
-tagline: Site Tagline
-author : false
-  name : Name Lastname
-  email : blah@email.test
-  github : username
-  twitter : username
-  feedburner : feedname
+tagline: PGCN
+#author : 
+#  name : Name Lastname
+#  email : blah@email.test
+#  github : username
+#  twitter : username
+#  feedburner : feedname
 
 # The production_url is only used when full-domain names are needed
 # such as sitemap.txt 
@@ -78,20 +78,20 @@ JB :
   # Set 'provider' to the comment provider you want to use.
   # Set 'provider' to false to turn commenting off globally.
   #
-  comments :
-    #provider : disqus
-    provider : false
-    disqus :
-      short_name : jekyllbootstrap
-    livefyre :
-      site_id : 123
-    intensedebate :
-      account : 123abc
-    facebook :
-      appid : 123
-      num_posts: 5
-      width: 580
-      colorscheme: light
+  #comments :
+  #  #provider : disqus
+  #  provider : false
+  #  disqus :
+  #    short_name : jekyllbootstrap
+  #  livefyre :
+  #    site_id : 123
+  #  intensedebate :
+  #    account : 123abc
+  #  facebook :
+  #    appid : 123
+  #    num_posts: 5
+  #    width: 580
+  #    colorscheme: light
    
   # Settings for analytics helper
   # Set 'provider' to the analytics provider you want to use.

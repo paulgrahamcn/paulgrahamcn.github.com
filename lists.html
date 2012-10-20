@@ -4,3 +4,11 @@ title: 文章列表
 ---
 {% include JB/setup %}
 
+{% for tag in site.tags %} 
+  {% if tag[0] == "lists" %}
+  <ul>
+    {% assign pages_list = tag[1] %}  
+    {% include JB/pages_list %}
+  </ul>
+  {% endif %}
+{% endfor %}
