@@ -8,9 +8,9 @@ group: navigation
 
 {% for tag in site.tags %} 
   {% if tag[0] == "acl" %}
-  <ul>
-    {% assign pages_list = tag[1] %}  
-    {% include JB/pages_list %}
-  </ul>
+    <ul>
+      {% assign pages_list = tag[1] %}
+      {% include JB/reverse_pages_list %}
+    </ul>
   {% endif %}
 {% endfor %}

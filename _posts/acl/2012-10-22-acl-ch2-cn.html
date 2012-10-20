@@ -1,0 +1,709 @@
+---
+layout: post
+title : "第2章--欢迎来到 Lisp (Welcome to Lisp)"
+category : acl
+tags : [acl]
+---
+{% include JB/setup %}
+
+本章的目的是尽快让你开始编程。本章结束时，你会掌握足够的 Common Lisp 知识来编程。
+
+<h1>2.1 形式 (Form)</h1>
+你可以经由编写 Lisp 而学习它，这是千真万确的事实，因为 Lisp 是交互式语言 (interactive language)。任何 Lisp 系统都包含一个交互式的前端叫做<em>顶层</em> (toplevel)。你在顶层输入 Lisp 表达式 (expression)，然后系统会显示它们的值。
+Lisp 通常会打印一个提示符 (prompt)告诉你，它正在等待你的输入。许多 Common Lisp 的实现用 <tt class="docutils literal">&gt;</tt> 作为顶层提示符。我们也沿用这个符号。
+最简单的 Lisp 表达式之一，是一个整数。如果我们在提示符后面输入 <tt class="docutils literal">1</tt> ，
+<pre class="literal-block">
+&gt; 1
+1
+&gt;
+</pre>
+系统会打印出它的值，伴随着另一个提示符，告诉你它在等待更多的输入。
+在这个情况里，打印的值和我们输入的值相同。一个数字 <tt class="docutils literal">1</tt> 称之为对自身求值。当我们输入需要做某些计算来求值的表达式时，生活变得更加有趣了。举例来说，如果我们想把两个数相加，我们输入类似：
+<pre class="literal-block">
+&gt; (+ 2 3)
+5
+</pre>
+在表达式 <tt class="docutils literal">(+ 2 3)</tt> 中， <tt class="docutils literal">+</tt> 称作操作符，而数字 <tt class="docutils literal">2</tt> 跟 <tt class="docutils literal">3</tt> 称之为参数 (arguments)。
+在日常生活中，我们会把此表达​​式写作 <tt class="docutils literal">2 + 3</tt> ，但在 Lisp 我们把 <tt class="docutils literal">+</tt> 操作符写在前面，后面跟着参数，把整个表达式用一对括号包起来： <tt class="docutils literal">(+ 2 3)</tt> 。这称之为<em>前序</em>表达式。一开始可能觉得这样写表达式有点怪，但事实上这种表示法是 Lisp 最美好的东西之一。
+举例来说，我们想要把三个数加起来，用通常的表示法我们要写两次 <tt class="docutils literal">+</tt> 号，
+<pre class="literal-block">
+2 + 3 + 4
+</pre>
+然而在 Lisp 中，我们只需增加一个参数：
+<pre class="literal-block">
+(+ 2 3 4)
+</pre>
+平常我们用 <tt class="docutils literal">+</tt> ，它必须有两个参数，一个在左，一个在右。前序表示法的灵活性意味著，在 Lisp 中， <tt class="docutils literal">+</tt> 可以接受任意数目的参数，包括没有参数：
+<pre class="literal-block">
+&gt; (+)
+0
+&gt; (+ 2)
+2
+&gt; (+ 2 3)
+5
+&gt; (+ 2 3 4)
+9
+&gt; (+ 2 3 4 5)
+14
+</pre>
+因为操作符可以接受不同数目的参数，我们需要用括号，来注明表达式的开始和结束。
+表达式可以嵌套。即表达式中的参数，可以是另一个复杂的表达式：
+<pre class="literal-block">
+&gt; (/ (- 7 1) (- 4 2))
+3
+</pre>
+用中文来说， (七减一) 除以 (四减二) 。
+另一个 Lisp 表示法美丽的地方是：它就是这么简单。所有 Lisp 表达式要么是 <tt class="docutils literal">1</tt> 这样的原子 (atom)，要么是包在括号中，由零个或多个表达式组成的列表 (lists)。以下是合法的 Lisp 表达式：
+<pre class="literal-block">
+2 (+ 2 3) (+ 2 3 4) (/ (- 7 1) (- 4 2))
+</pre>
+我们将看到，所有的 Lisp 程序都采用这种形式。像 C 这种语言有更复杂的语法：算数表达式采用中序表示法; 函数调用采用某种前序表示法，参数用逗号隔开；表达式用分号隔开；而一段程序用大括号隔开。
+在 Lisp 中，我们用单一的表示法来表达所有的概念。
+
+
+<h1>2.2 求值 (Evaluation)</h1>
+上一小节中，我们在顶层输入表达式，然后 Lisp 显示它们的值。在这节里我们深入理解一下表达式是如何被求值的。
+在 Lisp 中， <tt class="docutils literal">+</tt> 是一个函数，然而一个表达式如 <tt class="docutils literal">(+ 2 3)</tt> 是一个函数调用。
+当 Lisp 对函数调用求值时，它做这两个步骤：
+<blockquote>
+<ol class="arabic simple">
+<li>首先对参数从左至右求值。在这个情况是，每一个参数对自身求值，所以参数的值分别是 <tt class="docutils literal">2</tt> 跟 <tt class="docutils literal">3</tt> 。</li>
+<li>参数的值传入以操作符命名的函数。在这个情况是，即 <tt class="docutils literal">+</tt> 函数，返回 <tt class="docutils literal">5</tt> 。</li>
+</ol>
+</blockquote>
+如果任何参数本身是函数调用，它们遵循上述规则。所以当 <tt class="docutils literal">(/ (- 7 1) (- 4 2))</tt> 被求值时所发生的情况：
+<blockquote>
+<ol class="arabic simple">
+<li>Lisp 对 <tt class="docutils literal">(- 7 1)</tt> 求值: <tt class="docutils literal">7</tt> 求值为 <tt class="docutils literal">7</tt> ， <tt class="docutils literal">1</tt> 求值为 <tt class="docutils literal">1</tt> ，它们被传给函数 <tt class="docutils literal">-</tt> ，返回 <tt class="docutils literal">6</tt> 。</li>
+<li>Lisp 对 <tt class="docutils literal">(- 4 2)</tt> 求值: <tt class="docutils literal">4</tt> 求值为 <tt class="docutils literal">4</tt> ， <tt class="docutils literal">2</tt> 求值为 <tt class="docutils literal">2</tt> ，它们被传给函数 <tt class="docutils literal">-</tt> ，返回 <tt class="docutils literal">2</tt> 。</li>
+<li>数值 <tt class="docutils literal">6</tt> 与 <tt class="docutils literal">2</tt> 被传入函数 <tt class="docutils literal">/</tt> ，返回 <tt class="docutils literal">3</tt> 。</li>
+</ol>
+</blockquote>
+不是所有的 Common Lisp 操作符都是函数，但大部分是。而函数调用都是这样子求值。对参数从左至右求值，然后将它们的数值传入函数，来返回整个表达式的值。这称为 Common Lisp 的求值规则。
+<pre class="literal-block">
+逃离麻烦
+
+如果你试着输入 Lisp 不能理解的东西，它会显示一个错误讯息，然后把你带到一种叫做 *中断循环* (b​​reak loop)的顶层。
+中断循环给予有经验的程序员一个机会来找出错误的原因，不过最初你只会想知道如何从中断循环中跳出。
+如何返回顶层取决于你所使用的 Common Lisp 实现。在这个假设的实现环境中，输入 :abort 跳出：
+
+&gt; (/ 1 0)
+Error: Division by zero
+       Options: :abort, :backtrace
+&gt;&gt; :abort
+&gt;
+
+附录A 演示了 Lisp 程序如何除错，并给出一些常见的错误例子。
+</pre>
+一个不遵守 Common Lisp 求值规则的操作符是 <tt class="docutils literal">quote</tt> 。这 <tt class="docutils literal">quote</tt> 是一个特殊操作符，意味者他有自己特别的求值规则。而这个规则是：什么也不做。这 <tt class="docutils literal">quote</tt> 操作符接受一个参数，并逐字地返回它。
+<pre class="literal-block">
+&gt; (quote (+ 3 5))
+(+ 3 5)
+</pre>
+为了方便起见，Common Lisp 定义 <tt class="docutils literal">'</tt> 作为 <tt class="docutils literal">quote</tt> 的缩写。你可以在任何表达式前贴上一个 <tt class="docutils literal">'</tt> 得到与调用 <tt class="docutils literal">quote</tt> 同样的效果：
+<pre class="literal-block">
+&gt; '(+ 3 5)
+(+ 3 5)
+</pre>
+使用缩写 <tt class="docutils literal">'</tt> 比使用整个 <tt class="docutils literal">quote</tt> 表达式更常见。
+Lisp 提供 <tt class="docutils literal">quote</tt> 作为一种<em>保护</em>表达式被求值的方式。下一节会解释为什么这种保护很有用。
+
+
+<h1>2.3 数据 (Data)</h1>
+Lisp 提供了所有我们在其他语言找的到的数据类型，和一些其他语言所找不到的。有一个我们已经使用的类型是<em>整数</em> (integer)，它用一系列的数字来表示： <tt class="docutils literal">256</tt> 。另一种与别的语言一样的数据类型是<em>字串</em> (string)，它用一系列被双引号包住的字符表示： <tt class="docutils literal">“ora et labora”</tt> <a class="footnote-reference" href="#id2" id="id1">[3]</a> 。整数与字串都是对自身求值的。
+<table class="docutils footnote" frame="void" id="id2" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[3]</a></td><td>是拉丁文，意思是祷告与工作。</td></tr>
+</tbody>
+</table>
+两个通常我们在别的语言所找不到的 Lisp 数据类型是<em>符号</em>(symbol)与<em>列表</em>(lists)，<em>符号</em>是单词 (words)。无论你怎么输入，通常它们被转换成大写：
+<pre class="literal-block">
+&gt; 'Artichoke
+ARTICHOKE
+</pre>
+符号（通常）不对自身求值，所以如果你想引用一个符号，你应该像上例那样 <tt class="docutils literal">'</tt> 引用它。
+<em>列表</em> 是由被括号包住的零个或多个元素来表示。元素可以是任何类型，包括列表。你必须引用列表，不然 Lisp 会以为这是一个函数调用：
+<pre class="literal-block">
+&gt; '(my 3 &quot;Sons&quot;)
+(MY 3 SONS)
+&gt; '(the list (a b c) has 3 elements)
+(THE LIST (A B C) HAS 3 ELEMENTS)
+</pre>
+注意一个引号保护了整个表达式，以及里面的表达式被求值。
+你可以调用 <tt class="docutils literal">list</tt> 来创建列表。因为 <tt class="docutils literal">list</tt> 是一个函数，它的参数会被求值。这里我们看一个在函数 <tt class="docutils literal">list</tt> 调用里面，调用 <tt class="docutils literal">+</tt> 函数的例子：
+<pre class="literal-block">
+&gt; (list 'my (+ 2 1) &quot;Sons&quot;)
+(MY 3 &quot;Sons&quot;)
+</pre>
+我们现在来到领悟 Lisp 最卓越的特性之一的地方。 <em>Lisp的程序用列表来表示</em> 。如果参数的优雅与弹性不能说服你 Lisp 表示法是一个无价的工具，这里应该能使你信服。这意味着 Lisp 程序可以写出 Lisp 代码。 Lisp 程序员能（并且经常）写出能为自己写程序的程序。
+到第 10 章我们才来考虑这种程序，但在现在了解列表和表达式的关系是非常重要的，而不是被它们搞混。这也就是为什么我们需要 <tt class="docutils literal">quote</tt> 。如果一个列表被引用了，则求值规则对列表自身来求值；如果没有被引用，则列表被视为是代码，依求值规则对列表求值后，返回它的值。
+<pre class="literal-block">
+&gt; (list '(+ 2 1) (+ 2 1))
+((+ 2 1) (3))
+</pre>
+这里第一个参数被引用了，所以产生一个列表。第二个参数没有被引用，视为函数调用，经求值后得到一个数字。
+在 Common Lisp 中有两种方法来表示空的列表。你可以用一对不包括任何东西的括号来表示，或用符号 <tt class="docutils literal">nil</tt> 来表示空表。你用哪种表示法来表示空表都没关系，但它会被显示为 <tt class="docutils literal">nil</tt> ：
+<pre class="literal-block">
+&gt; ()
+NIL
+&gt; nil
+NIL
+</pre>
+你不需要引用 <tt class="docutils literal">nil</tt> (但引用也无妨)，因为 <tt class="docutils literal">nil</tt> 是对自身求值的。
+
+
+<h1>2.4 列表操作 (List Operations)</h1>
+用函数 <tt class="docutils literal">cons</tt> 来构造列表。如果传入的第二个参数是一个列表，则返回一个由第二个参数所组成的新列表，其中新列表的第一个元素是传入的第一个参数：
+<pre class="literal-block">
+&gt; (cons 'a '(b c d))
+(A B C D)
+</pre>
+我们可以把新元素建立在空表之上来构造新列表。上一节所看到的函数 <tt class="docutils literal">list</tt> 只是一个把几个元素加到 <tt class="docutils literal">nil</tt> 上的快捷方式：
+<pre class="literal-block">
+&gt; (cons 'a '(cons 'b nil))
+(A B)
+&gt; (list a b)
+(A B)
+</pre>
+来取出列表元素的基本函数是 <tt class="docutils literal">car</tt> 和 <tt class="docutils literal">cdr</tt> 。列表的 <tt class="docutils literal">car</tt> 是第一个元素，而列表的 <tt class="docutils literal">cdr</tt> 是第一个元素之后的所有元素：
+<pre class="literal-block">
+&gt; (car '(a b c))
+A
+&gt; (cdr '(a b c))
+(B C)
+</pre>
+你可以把 <tt class="docutils literal">car</tt> 与 <tt class="docutils literal">cdr</tt> 混合使用来取得列表中的任何元素。如果我们想要取得第三个元素，我们可以：
+<pre class="literal-block">
+&gt; (car (cdr (cdr '(a b c d))))
+C
+</pre>
+不过，你可以用更简单的 <tt class="docutils literal">third</tt> 来做到同样的事情：
+<pre class="literal-block">
+&gt; (third '(a b c d))
+C
+</pre>
+
+
+<h1>2.5 真与假 (Truth)</h1>
+在 Common Lisp 中，符号 <tt class="docutils literal">t</tt> 是表示 <tt class="docutils literal">真</tt> 的缺省值。和 <tt class="docutils literal">nil</tt> 一样， <tt class="docutils literal">t</tt>  也是对自身求值的。如果参数是一个列表，则函数 <tt class="docutils literal">listp</tt> 返回 <tt class="docutils literal">真</tt> ：
+<pre class="literal-block">
+&gt; (listp '(a b c))
+T
+</pre>
+一个函数的返回值打算被解释成 <tt class="docutils literal">真</tt> 或 <tt class="docutils literal">假</tt> ，则此函数被称为判断式 (<em>predicate</em>)。在 Common Lisp 中，判断式的名字通常以 <tt class="docutils literal">p</tt> 结尾。
+<tt class="docutils literal">假</tt> 在 Common Lisp 中，用 <tt class="docutils literal">nil</tt> ，即空表来表示。如果我们传给 <tt class="docutils literal">listp</tt> 的参数不是列表，则返回 <tt class="docutils literal">nil</tt> 。
+<pre class="literal-block">
+&gt; (listp 27)
+NIL
+</pre>
+因为 <tt class="docutils literal">nil</tt> 在 Common Lisp 中扮演两个角色，如果参数是一个空表，则函数 <tt class="docutils literal">null</tt> 返回 <tt class="docutils literal">真</tt> 。
+<pre class="literal-block">
+&gt; (null nil)
+T
+</pre>
+而如果参数是 <tt class="docutils literal">假</tt> ，则函数 <tt class="docutils literal">not</tt> 返回 <tt class="docutils literal">真</tt> ：
+<pre class="literal-block">
+&gt; (not nil)
+T
+</pre>
+<tt class="docutils literal">null</tt> 与 <tt class="docutils literal">not</tt> 做的是一样的事情。
+在 Common Lisp 中，最简单的条件式是 <tt class="docutils literal">if</tt> 。它通常接受三个参数：一个 <em>test</em> 表达式，一个 <em>then</em> 表达式和一个 <em>else</em> 表达式。若 <tt class="docutils literal">test</tt> 表达式被求值为 <tt class="docutils literal">真</tt> ，则 <tt class="docutils literal">then</tt> 表达式被求值，并返回这个值。若 <tt class="docutils literal">test</tt> 表达式为 <tt class="docutils literal">假</tt> ，则 <tt class="docutils literal">else</tt> 表达式被求值，并返回这个值：
+<pre class="literal-block">
+&gt; (if (listp '(a b c))
+      (+ 1 2)
+      (+ 5 6))
+3
+&gt; (if (listp 27)
+      (+ 1 2)
+      (+ 5 6))
+11
+</pre>
+跟 <tt class="docutils literal">quote</tt> 一样， <tt class="docutils literal">if</tt> 是特殊操作符。不能用一个函数来实现，因为函数调用的参数永远会被求值，而 <tt class="docutils literal">if</tt> 的特点是只有最后两个参数的其中一个会被求值。 <tt class="docutils literal">if</tt> 的最后一个参数是选择性的。如果你忽略它，缺省是 <tt class="docutils literal">nil</tt> ：
+<pre class="literal-block">
+&gt; (if (listp 27)
+      (+ 1 2))
+NIL
+</pre>
+虽然 <tt class="docutils literal">t</tt> 是 <tt class="docutils literal">真</tt> 的缺省表示法，任何非 <tt class="docutils literal">nil</tt> 的东西，在逻辑的语意里会被​​视为 <tt class="docutils literal">真</tt> 。
+<pre class="literal-block">
+&gt; (if 27 1 2)
+1
+</pre>
+逻辑操作符 <strong>and</strong> 和 <strong>or</strong> 与条件式 (conditionals) 类似。两者都接受任意数目的参数，但只对能够决定返回值的那几个参数来作求值。如果所有的参数都为 <tt class="docutils literal">真</tt> （即不为 <tt class="docutils literal">nil</tt> )，那么 <tt class="docutils literal">and</tt> 会返回最后一个参数的值：
+<pre class="literal-block">
+&gt; (and t (+ 1 2))
+3
+</pre>
+如果其中一个参数为 <tt class="docutils literal">假</tt> ，那么之后的所有参数都不会被求值。 <tt class="docutils literal">or</tt> 也是如此，只要碰到一个是 <tt class="docutils literal">真</tt> 的参数，就停止对之后的所有的参数求值。
+这两个操作符称之为<em>宏</em>。跟特殊操作符一样，宏可以绕过一般的求值规则。第十章解释了如何编写你自己的宏。
+
+
+<h1>2.6 函数 (Functions)</h1>
+你可以用 <tt class="docutils literal">defun</tt> 来定义新函数。它通常接受三个以上的参数：一个名字，一列参数 (a list of parameters)，及组成函数主体的一个或多个表达式。我们可能会这样定义 <tt class="docutils literal">third</tt> ：
+<pre class="literal-block">
+&gt; (defun our-third (x)
+    (car (cdr (cdr x))))
+OUR-THIRD
+</pre>
+第一个参数说明此函数的名称将是 <tt class="docutils literal"><span class="pre">our-third</span></tt> 。第二个参数，一个列表 <tt class="docutils literal">(x)</tt> ，说明这个函数会接受一个参数 (parameter): <tt class="docutils literal">x</tt> 。这样使用的占位符 (placeholder) 符号叫做<em>变量</em>。当变量代表了传入函数的参数，如这里的 <tt class="docutils literal">x</tt> ，又被叫做<em>参数</em>(<em>parameter</em>)。
+定义的其它部分， <tt class="docutils literal">(car (cdr (cdr <span class="pre">x)))</span></tt> ，即所谓的函数主体 (the body of the function)。它告诉 Lisp 怎么计算此函数的返回值。所以调用一个 <tt class="docutils literal"><span class="pre">our-third</span></tt> 函数，对于我们作为参数传入的任何 x，会返回  <tt class="docutils literal">(car (cdr (cdr <span class="pre">x)))</span></tt>  ：
+<pre class="literal-block">
+&gt; (our-third '(a b c d))
+C
+</pre>
+既然我们已经看过了变量，理解什么是符号就更简单了。它们是变量的名字，它们本身就是以对象 (object)的方式存在。这也是为什么符号，必须像列表一样被引用。一个列表必须被引用，不然会被视为代码。一个符号必须要被引用，不然会被当做变量。
+你可以把函数定义想成广义版的 Lisp 表达式。下面的表达式测试 <tt class="docutils literal">1</tt> 和 <tt class="docutils literal">4</tt> 的和是否大于 <tt class="docutils literal">3</tt> ：
+<pre class="literal-block">
+&gt; (&gt; (+ 1 4) 3)
+T
+</pre>
+藉由替换这些数字为变量，我们可以写一个函数，测试任两数之和是否大于第三个数：
+<pre class="literal-block">
+&gt; (defun sum-greater (x y z)
+    (&gt; (+ x y) z))
+SUM-GREATER
+&gt; (sum-greater 1 4 3)
+T
+</pre>
+Lisp 不对程序、过程 (procedure)及函数来作区别。函数做了所有的事情（事实上，函数是语言的主要部分）。如果你想要把你的函数之一作为主函数(<em>main</em> function)，可以这么做，但你平常就能在顶层中调用任何一个函数。这表示当你编程时，你可以把程序分成一小块一小块地来作调试。
+
+
+<h1>2.7 递归 (Recursion)</h1>
+上一节我们定义的函数，调用了别的函数来帮它们做事。比如 <tt class="docutils literal"><span class="pre">sum-greater</span></tt> 调用了 <tt class="docutils literal">+</tt> 和 <tt class="docutils literal">&gt;</tt> 。函数可以调用任何函数，包括自己。自己调用自己的函数是<em>递归的</em> (recursive)。 Common Lisp 函数 <tt class="docutils literal">member</tt> 测试某个东西是否为一个列表的元素。下面是定义成递归函数的简化版：
+<pre class="literal-block">
+&gt; (defun our-member (obj lst)
+    (if (null lst)
+        nil
+    (if (eql (car lst) obj)
+        lst
+        (our-member obj (cdr lst)))))
+OUR-MEMBER
+</pre>
+判断式 <tt class="docutils literal">eql</tt> 测试它的两个参数是否相等；此外，这个定义的所有东西我们之前都学过。下面是它的运行情况：
+<pre class="literal-block">
+&gt; (our-member 'b '(a b c))
+(B C)
+&gt; (our-member 'z '(a b c))
+NIL
+</pre>
+下面是 <tt class="docutils literal"><span class="pre">our-member</span></tt> 的定义对应到英语的描述。为了测试一个对象 <tt class="docutils literal">obj</tt> 是否是一个列表 <tt class="docutils literal">lst</tt> 的成员，我们
+<blockquote>
+<ol class="arabic simple">
+<li>首先检查 <tt class="docutils literal">lst</tt> 列表是否为空列表。如果是空列表，那 <tt class="docutils literal">obj</tt> 一定不是它的成员，结束。</li>
+<li>否则，若 <tt class="docutils literal">obj</tt> 是列表的第一个元素时，它是列表的一个成员。</li>
+<li>不然只有当 <tt class="docutils literal">obj</tt> 是列表其余部分的元素时，它才是列表的一个成员。</li>
+</ol>
+</blockquote>
+当你想要了解递归函数是怎么工作时，把它翻成这样的叙述会帮助你理解。
+起初，许多人觉得递归函数很难理解。大部分的理解困难来自对函数使用了一个错误的比喻。人们倾向于把函数理解为某种机器。原物料像参数 (parameters)一样抵达；某些工作委派给其它函数；最后组装起来的成品，被作为一个返回值运送出去。如果我们用这种比喻来理解函数，那递归就自相矛盾了。机器怎可以把工作委派给自己？它已经在忙碌中了。
+较好的比喻是，把函数想成一个处理的过程。在过程中，递归是在自然不过的事情了。我们经常在日常生活中，看到递归的过程。举例来说，假设一个历史学家，对欧洲历史上的人口变化感兴趣。研究文献的过程很可能是：
+<blockquote>
+<ol class="arabic simple">
+<li>取得一个文献的复本</li>
+<li>寻找关于人口变化的资讯</li>
+<li>如果这份文献提到其它可能有用的文献，研究它们。</li>
+</ol>
+</blockquote>
+这个过程是很容易理解的，而且它是递归的，因为第三个步骤可能带出一个或多个同样的过程。
+所以，别把 <tt class="docutils literal"><span class="pre">our-member</span></tt> 想成是一种测试某个东西是否在一个列表的机器。而是把它想成是，决定某个东西是否在一个列表的规则。如果我们从这个角度来考虑函数，那递归的矛盾就不复存在了。
+
+
+<h1>2.8 阅读 Lisp (Reading Lisp)</h1>
+上一节我们定义的 <tt class="docutils literal"><span class="pre">our-member</span></tt> 以五个括号结尾。更复杂的函数定义可能以七、八个括号结尾。刚学 Lisp 的人看到这么多括号会感到气馁。这叫人怎么读这样的程序，更不用说编了？这叫人怎么知道哪个括号该跟哪个匹配？
+答案是，你不需要这么做。 Lisp 程序员用缩排来阅读及编写程序，而不是括号。当他们在写程序时，他们让文字编辑器显示哪个括号该与哪个匹配。任一个好的文字编辑器，特别是 Lisp 系统自带的，都应该能做到括号匹配 (paren-matching)。在这种编辑器中，当你输入一个括号时，编辑器指出与其匹配的那一个。如果你的编辑器不能匹配括号，别用了，想想如何让它做到，因为没有这个功能，你根本不可能编 Lisp 程序 <a class="footnote-reference" href="#id4" id="id3">[1]</a> 。
+<table class="docutils footnote" frame="void" id="id4" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id3">[1]</a></td><td>在 vi，你可以用 :set sm 来启用括号匹配。在 Emacs，M-x lisp-mode 是一个启用的好方法。</td></tr>
+</tbody>
+</table>
+有了好的编辑器，括号匹配不再是个问题。而且因为 Lisp 缩排有通用的惯例，阅读程序也不是个问题。因为所有人都使用一样的习惯，你可以忽略那些括号，通过缩排来阅读程序。
+任何有经验的 Lisp 黑客，会发现如果是这样的 <tt class="docutils literal"><span class="pre">our-member</span></tt> 的定义很难阅读：
+<pre class="literal-block">
+(defun our-member (obj lst) (if (null lst) nil (if
+(eql (car lst) obj) lst (our-member obj (cdr lst)))))
+</pre>
+但如果程序适当地缩排时，他就没有问题了。你可以忽略大部分的括号而仍能读懂它：
+<pre class="literal-block">
+defun our-member (obj lst)
+  if null lst
+     nil
+     if eql (car lst) obj
+        lst
+        our-member obj (cdr lst)
+</pre>
+事实上，这是一个你在纸上写 Lisp 程序的实用方法。等你输入的时候，可以利用编辑器匹配括号的功能。
+
+
+<h1>2.9 输入输出 (Input and Output)</h1>
+到目前为止，我们已经利用顶层偷偷使用了 I/O​​ 。对实际的交互程序来说，这似乎还是不太够。在这一节，我们来看看几个输入输出的函数。
+最普遍的 Common Lisp 输出函数是 <tt class="docutils literal">format</tt> 。它接受两个或两个以上的参数，第一个参数表示，输出要在哪里被打印，第二个参数是字串模版 (String Template)，而剩下的参数，通常是要插入到字串模版对象的打印表示法 (printed representation)。下面是一个典型的例子：
+<pre class="literal-block">
+&gt; (format t &quot;~A plus ~A equals ~A. ~%&quot; 2 3 (+ 2 3))
+2 PLUS 3 EQUALS 5
+NIL
+</pre>
+注意到有两个东西被显示出来。第一行是 <tt class="docutils literal">format</tt> 印出来的。第二行是调用 <tt class="docutils literal">format</tt> 函数的返回值，就像平常顶层会打印出来的一样。通常像 <tt class="docutils literal">format</tt> 这种函数不会直接在顶层调用，而在程序内部中使用，所以返回值不会被看到。
+<tt class="docutils literal">format</tt> 的第一个参数 <tt class="docutils literal">t</tt> 表示输出被送到缺省的地方去。通常这会是顶层。第二个参数是一个当作输出模版的字串。在这字串里，每一个 <tt class="docutils literal">~A</tt> 表示了被填入的位置，而 <tt class="docutils literal">~%</tt> 表示一个换行。这些被填入的位置依序被后面的参数替换。
+标准的输入函数是 <tt class="docutils literal">read</tt> 。当没有参数时，它读取缺省的位置，通常是顶层。下面这一个函数，提示使用者输入，并返回任何输入的东西：
+<pre class="literal-block">
+(defun askem (string)
+  (format t &quot;~A&quot; string)
+  (read))
+</pre>
+它的行为如下：
+<pre class="literal-block">
+&gt; (askem &quot;How old are you?&quot;)
+How old are you? 29
+29
+</pre>
+记住 <tt class="docutils literal">read</tt> 会一直永远等在这里，直到输入某些东西并（通常要）按下回车。因此，不印出明确的提示讯息是很不明智的，你的程序会给人已经死机的印象，但其实它在等待输入。
+第二件关于 <tt class="docutils literal">read</tt> 需要知道的事是它很强大： <tt class="docutils literal">read</tt> 是一个完整的 Lisp 解析器 (parser)。不仅是读入字符，然后当作字串返回它们。它解析它读入的东西，并返回产生的 Lisp 对象。在上述的例子，它返回一个数字。
+<tt class="docutils literal">askem</tt> 的定义虽然很短，但它显示了一些我们在之前的函数没看过的东西。它的函数主体可以有不只一个表达式。函数主体可以有任意数量的表达式。当函数被调用时，他们会依序求值，然后函数会返回最后一个的值。
+在之前的每一节中，我们坚持所谓“纯粹的” Lisp –– 即没有副作用的 Lisp 。一个副作用是指，一个表达式被求值后，对外部世界的状态做了某些改变。当我们对一个如 <tt class="docutils literal">(+ 1 2)</tt> 这样纯粹的 Lisp 表达式求值，没有产生副作用。它只返回一个值。但当我们调用 <tt class="docutils literal">format</tt> 时，它不仅返回值，还印出了某些东西。这是一种副作用。
+当我们想要写没有副作用的程序，那么定义多个表达式的函数主体就没有意义了。最后一个表达式的值，会被当成函数的返回值，而之前表达式的值都被舍弃了。如果这些表达式没有副作用，你没有任何理由告诉 Lisp ，为什么要去对它们求值。
+
+
+<h1>2.10 变量 (Variables)</h1>
+<tt class="docutils literal">let</tt> 是一个最常用的 Common Lisp 的操作符之一，它让你引入新的局部变量 (local variable)：
+<pre class="literal-block">
+&gt; (let ((x 1) (y 2))
+     (+ x y))
+3
+</pre>
+一个 <tt class="docutils literal">let</tt> 表达式有两个部分。第一个部分是一系列创造新变量的指令，每个的形式为 <em>(variable expression)</em> 。每一个变量会被赋予相对应表达式的值。上述的例子中，我们创造了两个变量， <tt class="docutils literal">x</tt> 和 <tt class="docutils literal">y</tt> ，它们分别被赋予初始值 <tt class="docutils literal">1</tt> 和 <tt class="docutils literal">2</tt> 。这些变量只在 <tt class="docutils literal">let</tt> 的主体内有效。
+一列变量与数值之后，是一个具表达式的主体，它们依序被求值。在这个例子中，只有一个表达式，调用 <tt class="docutils literal">+</tt> 函数。最后一个表达式的求值作为 <tt class="docutils literal">let</tt> 的返回值。以下是一个用 <tt class="docutils literal">let</tt> 所写的，更有选择性的 <tt class="docutils literal">askem</tt> 函数：
+<pre class="literal-block">
+(defun ask-number ()
+  (format t &quot;Please enter a number. &quot;)
+  (let ((val (read)))
+    (if (numberp val)
+        val
+        (ask-number))))
+</pre>
+这个函数创造了变量 <tt class="docutils literal">val</tt> 来储存 <tt class="docutils literal">read</tt> 所返回的对象。因为它知道该如何处理这个对象，函数可以先观察你的输入，再决定是否返回它。你可能猜到了， <tt class="docutils literal">numberp</tt> 是一个判断式，测试它传入的参数是否为数字。
+如果使用者输入的数字，不是一个数字， <tt class="docutils literal"><span class="pre">ask-number</span></tt> 调用它自己。结果是我们有一个坚持要得到数字的函数：
+<pre class="literal-block">
+&gt; (ask-number)
+Please enter a number. a
+Please enter a number. (ho hum)
+Please enter a number. 52
+52
+</pre>
+像这些我们已经看过的变量都叫做局部变量。它们只在特定的上下文中有效的。还有另外一种变量叫做全域变量 (global variable)，是在任何地方都可见的。 <a class="footnote-reference" href="#id6" id="id5">[2]</a>
+<table class="docutils footnote" frame="void" id="id6" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id5">[2]</a></td><td>真正的区别是词法 (lexical)与特殊变量 (special variable)，但我们到第六章才讨论这个主题。</td></tr>
+</tbody>
+</table>
+你可以给 <tt class="docutils literal">defparameter</tt> 传入一个符号和一个值，来创造一个全域变量：
+<pre class="literal-block">
+&gt; (defparameter *glob* 99)
+*GLOB*
+</pre>
+像这样的变量在任何地方都可以存取，除了在有定义了相同名字的区域变量的表达式里。为了避免这种情形发生，通常我们在给全域变量命名时，以星号作开始与结束。刚才我们创造的变量可以念作 “星​​-glob-星” (star-glob-star)。
+你也可以用 <tt class="docutils literal">defconstant</tt> 来定义一个全域的常量：
+<pre class="literal-block">
+(defconstant limit (+ *glob* 1))
+</pre>
+这里我们不需要给常数一个独特的名字，因为如果有相同的名字，就会有错误产生 (error)。如果你想要检查某些符号，是否是一个全域变量或常数，用 <tt class="docutils literal">boundp</tt> ：
+<pre class="literal-block">
+&gt; (boundp '*glob*)
+T
+</pre>
+
+
+<h1>2.11 赋值 (Assignment)</h1>
+在 Common Lisp 中，最普遍的赋值操作符 (assignment operator)是 <tt class="docutils literal">setf</tt> 。我们可以用它来给全域或局域变量做赋值：
+<pre class="literal-block">
+&gt; (setf *glob* 98)
+98
+&gt; (let ((n 10))
+    (setf n 2)
+    n)
+2
+</pre>
+如果 <tt class="docutils literal">setf</tt> 的第一个参数是一个符号(symbol)，且这个符号不是某个局部变量的名字，那么 <tt class="docutils literal">setf</tt> 将设置这个符号为全局变量：
+<pre class="literal-block">
+&gt; (setf x (list 'a 'b 'c))
+(A B C)
+</pre>
+也就是说，通过赋值，你可以隐式地创建全局变量。
+不过，一般来说，还是使用 <tt class="docutils literal">defparameter</tt> 显式地创建全局变量比较好。
+你不仅可以给变量赋值。传入 <tt class="docutils literal">setf</tt> 的第一个参数，还可以是一个表达式或一个变量名。在这种情况下，第二个参数的值被插入至第一个参数所引用 (refer)的地方：
+<pre class="literal-block">
+&gt; (setf (car x) 'n)
+N
+&gt; x
+(N B C)
+</pre>
+<tt class="docutils literal">setf</tt> 的第一个参数几乎可以是任何引用到特定位置的表达式。所有这样的操作符在附录 D 中被标注为 “可设置的” (&quot;settable&quot;)。你可以给任何（偶数）数目的参数至 <tt class="docutils literal">setf</tt> 。一个这样的表达式
+<pre class="literal-block">
+(setf a b
+      c d
+      e f)
+</pre>
+等同于依序调用三个单独的 <tt class="docutils literal">setf</tt> 函数：
+<pre class="literal-block">
+(setf a b)
+(setf c d)
+(setf e f)
+</pre>
+
+
+<h1>2.12 函数式编程 (Functional Programming)</h1>
+函数式编程意味著撰写利用返回值而工作的程序，而不是修改东西。它是 Lisp 的主流范式 (paradigm)。大部分 Lisp 的内置函数被调用是为了它们的返回值，而不是它们的副作用。
+举例来说，函数 <tt class="docutils literal">remove</tt> 接受一个对象和一个列表，并返回一个不含这个对象的新列表：
+<pre class="literal-block">
+&gt; (setf lst '(c a r a t))
+(C A R A T)
+&gt; (remove 'a lst)
+(C R T)
+</pre>
+为什么不干脆说 <tt class="docutils literal">remove</tt> 从列表中移除一个对象？因为它不是这么做的。原来的表没有被改变：
+<pre class="literal-block">
+&gt; lst
+(C A R A T)
+</pre>
+若你真的想从列表中移除某些东西怎么办？在 Lisp 通常你这么做，把这个列表当作参数，传入某些函数，并使用 <tt class="docutils literal">setf</tt> 处理返回值。要移除所有在列表 <tt class="docutils literal">x</tt> 的 <tt class="docutils literal">a</tt> ，我们这么做：
+<pre class="literal-block">
+(setf x (remove 'a x))
+</pre>
+函数式编程本质上意味者避免使用如 <tt class="docutils literal">setf</tt> 的函数。起初可能连想这怎么可能都很困难，更遑论去做了。怎么可以只凭返回值来建立程序？
+完全不用到副作用是很不方便的。然而，随着你进一步阅读，你会惊讶地发现需要副作用的地方很少。你副作用用得越少，你就更上一层楼。
+函数式编程最重要的优点之一是，它允许交互式测试 (interactive testing)。在纯函数化的程序里，你可以测试每个你写的函数。如果它返回你预期的值，你可以确信它是对的。这额外的信心，集合起来，会产生巨大的差别。当你改动了程序中的任何一个地方，你会得到即时的转变。而这种即时的转变使我们有一种新的编程风格。类比于电话与信件，让我们有一种新的通讯方式。
+
+
+<h1>2.13 迭代 (Iteration)</h1>
+当我们想作一些重复的事情时，用迭代比用递归更来得自然。典型的例子是用迭代来产生某种表格。这个函数
+<pre class="literal-block">
+(defun show-squares (start end)
+   (do ((i start (+ i 1)))
+       ((&gt; i end) 'done)
+     (format t &quot;~A ~A~%&quot; i (* i i))))
+</pre>
+列印从 <tt class="docutils literal">start</tt> 到 <tt class="docutils literal">end</tt> 之间的整数的平方：
+<pre class="literal-block">
+&gt; (show-squares 2 5)
+2 4
+3 9
+4 16
+5 25
+DONE
+</pre>
+这个 <tt class="docutils literal">do</tt> 宏是 Common Lisp 中最基本的迭代操作符。跟 <tt class="docutils literal">let</tt> 一样， <tt class="docutils literal">do</tt> 可以创造变量，而且第一个参数是一列变量的规格说明。每一个在这个列表的元素可以是以下的形式
+<pre class="literal-block">
+(variable initial update)
+</pre>
+其中 <em>variable</em> 是一个符号， <em>initial</em> 和 <em>update</em> 是表达式。最初每个变量会被赋予相应的 <em>initial</em> 的值；每一次迭代中，它会被赋予相应的 <em>update</em> 的值。在 <tt class="docutils literal"><span class="pre">show-squares</span></tt> 中， <tt class="docutils literal">do</tt> 只创造了一个变量 <tt class="docutils literal">i</tt> 。在第一次迭代中， <tt class="docutils literal">i</tt> 被赋与 <tt class="docutils literal">start</tt> 的值，在之后的迭代中，它的值会被增加 1 。
+第二个传给 <tt class="docutils literal">do</tt> 的参数包含了一个或多个表达式。第一个表达式用来测试迭代是否停止。在上面的例子中，测试表达式是 <tt class="docutils literal">(&gt; i end)</tt> 。剩下来在列表中的表达式会依序被求值，直到迭代停止，而最后一个值会被当作 <tt class="docutils literal">do</tt> 的返回值来返回。所以 <tt class="docutils literal"><span class="pre">show-squares</span></tt> 总是返回 <tt class="docutils literal">done</tt> 。
+<tt class="docutils literal">do</tt> 剩下来的参数组成了循环的主体。它们会在每次迭代中依序被求值。在每一次迭代里，变量被更新，检查终止测试条件，然后（若测试失败）主体被求值。
+作为比较，以下是递归版本的 <tt class="docutils literal"><span class="pre">show-squares</span></tt> ：
+<pre class="literal-block">
+(defun show-squares (i end)
+    (if (&gt; i end)
+      'done
+      (progn
+        (format t &quot;~A ~A~%&quot; i (* i i))
+        (show-squares (+ i 1) end))))
+</pre>
+在这函数中唯一的新东西是 <tt class="docutils literal">progn</tt> 。它接受任意数目个表达式，对它们依序求值，并返回最后一个值。
+为了某些特殊情况， Common Lisp 有更简单的迭代操作符。举例来说，要遍历一个列表的元素，你可能会使用 <tt class="docutils literal">dolist</tt>  。以下是一个返回列表长度的函数：
+<pre class="literal-block">
+(defun our-length (lst)
+  (let ((len 0))
+    (dolist (obj lst)
+      (setf len (+ len 1)))
+    len))
+</pre>
+这里 <tt class="docutils literal">dolist</tt> 接受这样形式的参数 <tt class="docutils literal">(variable expression)</tt> ，跟着一个具有表达式的主体。主体会被求值，而变量相继与表达式所返回的列表元素绑定。因此上面的循环说，对于列表 <tt class="docutils literal">lst</tt> 中的每一个 <tt class="docutils literal">obj</tt> ，递增 <tt class="docutils literal">len</tt> 。很显然的这个函数的递归版本是：
+<pre class="literal-block">
+(defun our-length (lst)
+  (if (null lst)
+      0
+      (+ (our-length (cdr lst)) 1)))
+</pre>
+也就是说，如果这个列表是空表，它的长度是 <tt class="docutils literal">0</tt> ; 否则它的长度就是 <tt class="docutils literal">cdr</tt> 的长度加一。递归版本的 <tt class="docutils literal"><span class="pre">our-length</span></tt> 比较易懂，但因为它不是尾递归 (tail-recursive)的形式 (見 13.2 节)，它的效率不那么高。
+
+
+<h1>2.14 作为对象的函数 (Functions as Objects)</h1>
+函数在 Lisp 中就像符号、字串或列表那样稀松平常的对象。如果我们把一个函数的名字传给 <tt class="docutils literal">function</tt> ，它会返回相关联的对象。跟 <tt class="docutils literal">quote</tt> 一样， <tt class="docutils literal">function</tt> 是一个特殊操作符，所以我们不需引用 (quote)它的参数：
+<pre class="literal-block">
+&gt; (function +)
+#&lt;Compiled-Function + 17BA4E&gt;
+</pre>
+这看起来很奇怪的返回值是在典型的 Common Lisp 实现中，可能的显示方法。
+到目前为止，我们仅讨论过 Lisp 显示它们与我们输入它们，看起来是一样的对象。这个惯例对函数不适用。一个内建函数像是 <tt class="docutils literal">+</tt> ，在内部可能是一段机器语言代码 (machine language code)。一个 Common Lisp 实现可能选择任何它所喜欢的外部表示法 (external representation)。
+就如同我们可以用 <tt class="docutils literal">'</tt> 作为 <tt class="docutils literal">quote</tt> 的缩写，我们可以用 <tt class="docutils literal">#'</tt> 作为 <tt class="docutils literal">function</tt> 的缩写：
+<pre class="literal-block">
+&gt; #'+
+#&lt;Compiled-Function + 17BA4E&gt;
+</pre>
+这个缩写称之为升引号 (sharp-quote)。
+和别种对象一样，我们可以把函数当作参数传入。一个接受函数作为参数的函数是 <tt class="docutils literal">apply</tt> 。它接受一个函数和一个参数列表，并返回把传入函数应用在传入参数的结果：
+<pre class="literal-block">
+&gt; (apply #'+ '(1 2 3))
+6
+&gt; (+ 1 2 3)
+6
+</pre>
+它可以接受任意数目的参数，只要最后一个参数是列表：
+<pre class="literal-block">
+&gt; (apply #'+ 1 2 '(3 4 5))
+15
+</pre>
+函数 <tt class="docutils literal">funcall</tt> 做一样的事情但参数不需要包装成列表。
+<pre class="literal-block">
+&gt; (funcall #'+ 1 2 3)
+6
+</pre>
+<pre class="literal-block">
+什么是 lambda?
+
+lambda 表达式中的 lambda 不是一个操作符。它只是个符号。
+在早期的 Lisp 方言里有一个目的：函数在内部用列表来表示，
+因此辨别列表与函数的方法，是检查第一个元素是否为符号 lambda 。
+
+在 Common Lisp 中，你可以用列表来表达函数，
+但在内部被表示成独特的函数对象。因此不再需要 lambda 。
+如果需要把函数记为
+
+((x) (+ x 100))
+
+而不是
+
+(lambda (x) (+ x 100))
+
+也是可以的。
+
+但 Lisp 程序员习惯用符号 lambda ，来开始写函数，
+因此 Common Lisp 为了这个传统而保留了 lambda 。
+</pre>
+这个 <tt class="docutils literal">defun</tt> 宏创造一个函数并替它命名。但函数不需要有名字，而且我们不需要 <tt class="docutils literal">defun</tt> 来定义他们。像大多数的 Lisp 对象一样，我们可以直接引用函数。
+要直接引用一个整数，我们使用一系列的数字；要直接引用一个函数，我们使用所谓的 <em>lambda 表达式</em> 。一个 lambda 表达式是一个列表，包含符号 lambda ，伴随着参数列表，与一个由零个或多个表达式所组成的主体。
+下面的 lambda 表达式代表一个接受两个数字，并返回它们的和的函数：
+<pre class="literal-block">
+(lambda (x y)
+  (+ x y))
+</pre>
+列表 <tt class="docutils literal">(x y)</tt> 是参数列表，跟在它后面的是函数主体。
+一个 lambda 表达式可以被当成是函数的名字。就像普通的函数名称， lambda 表达式可以是函数调用的第一个元素，
+<pre class="literal-block">
+&gt; ((lambda (x) (+ x 100)) 1)
+101
+</pre>
+而通过在 lambda 表达式前面贴上 <tt class="docutils literal">#'</tt> ，我们得到对应的函数，
+<pre class="literal-block">
+&gt; (funcall #'(lambda (x) (+ x 100))
+           1)
+</pre>
+lambda 表示法除前述用途外，还允许我们使用匿名函数。
+
+
+<h1>2.15 类型 (Types)</h1>
+Lisp 用非常灵活的方法来处理类型。在很多语言里，变量是有类型的，而你得声明变量的类型才能使用它。在 Common Lisp 里，数值才有类型，而不是变量。你可以想像每一个对象都贴有一个，标明它的类型的标签。这种方法叫做 <em>显式类型</em> ( <em>manifest typing</em> )。你不需要声明变量的类型，因为任​​何变量可以存放任何类型的对象。
+虽然从来不需要声明类型 (type declarations)，为了效率的原因你可能想要用到它们。类型声明在第 13.3 节中讨论。
+Common Lisp 的内建类型组成了一个父子关系的结构 (a hierarchy of subtypes and supertypes)。一个对象总有不止一个类型。举例来说，数字 27 的类型依普遍性的增加，依序是 <tt class="docutils literal">fixnum</tt> , <tt class="docutils literal">integer</tt> , <tt class="docutils literal">rational</tt> , <tt class="docutils literal">real</tt> , <tt class="docutils literal">number</tt> , <tt class="docutils literal">atom</tt> 和 <tt class="docutils literal">t</tt> 类型。 (数值类型在第 9 章讨论。)类型 <tt class="docutils literal">t</tt> 是所有类型的超集 (supertype)。所以每个对象都是 <tt class="docutils literal">t</tt> 类型。
+函数 <tt class="docutils literal">typep</tt> 接受一个对象和一个类型指定，然后若对象是指定的那种类型就返回真：
+<pre class="literal-block">
+&gt; (typep 27 'integer)
+T
+</pre>
+当我们遇到各式内置类型时，我们会讨论它们。
+
+
+<h1>2.16 展望 (Looking Forward)</h1>
+本章仅谈到 Lisp 的表面。然而一种非比寻常的语言的形象开始出现了。首先，这语言用一种语法来表达所有的程序结构。这种语法基于列表，列表是一种 Lisp 对象。函数本身也是 Lisp 对象，能用列表来表示。而 Lisp 本身就是 Lisp 程序。几乎所有你定义的函数与内置的 Lisp 函数没有任何区别。
+不用担心如果你对这些概念还不太了解。 Lisp 介绍了这么多新颖的概念，在你能使用它们之前，你得花时间去熟悉它们。不过至少要了解一件事：在这些概念当中，有优雅到令人吃惊的概念。
+<a class="reference external" href="http://en.wikipedia.org/wiki/Richard_P._Gabriel">Richard Gabriel</a> 曾经半开玩笑地描述说 C 是拿来写 Unix 的语言。我们也可以说 Lisp 是拿来写 Lisp 的语言。但这是两种不同的论述。一个可以用自己编写的语言和一种适合编写某些特定类型的应用的语言，是根本上不同的。它开启了新的编程方法：你不但在语言当中编程，你还把语言改善成适合你程序的语言。如果你想了解 Lisp 编程的本质，这个概念是一个好的开始。
+
+
+<h1>Chapter 2 总结 (Summary)</h1>
+<ol class="arabic simple">
+<li>Lisp 是一种交互式语言。如果你在顶层输入一个表达式， Lisp 会显示它的值。</li>
+<li>Lisp 程序由表达式组成。一个表达式可以是原子，或一个由操作符跟着零个或多个参数的列表。前序表示法意味着操作符可以有任意数目的参数。</li>
+<li>Common Lisp 函数调用的求值规则： 对参数从左至右求值，然后把它们的值传入由操作符表示的函数。 <tt class="docutils literal">quote</tt> 操作符有自己的求值规则，它逐字不变地返回参数。</li>
+<li>除了平常的资料类型， Lisp 有符号与列表。因为 Lisp 程序是用列表来表示的，很简单写出能编程的程序。</li>
+<li>三个基本的​​列表函数是 <tt class="docutils literal">cons</tt> ，它创建一个列表; <tt class="docutils literal">car</tt> ，它返回列表的第一个元素; 和 <tt class="docutils literal">cdr</tt> ，它返回第一个元素之后的所有东西。</li>
+<li>在 Common Lisp 中， <tt class="docutils literal">t</tt> 表示 <tt class="docutils literal">真</tt> ，而 <tt class="docutils literal">nil</tt> 表示 <tt class="docutils literal">假</tt> 。在逻辑的语意中，任何不为 <tt class="docutils literal">nil</tt> 的东西都视为 <tt class="docutils literal">真</tt> 。基本的条件式是 <tt class="docutils literal">if</tt> 。 <tt class="docutils literal">and</tt> 与 <tt class="docutils literal">or</tt> 是相似的条件式。</li>
+<li>Lisp 主要由函数所组成。你可以用 <tt class="docutils literal">defun</tt> 来定义新的函数。</li>
+<li>一个调用自己的函数是递归的。一个递归函数应该要被视为过程，而不是机器。</li>
+<li>括号不是问题，因为程序员藉由缩排来阅读与编写 Lisp 程序。</li>
+<li>基本的 I/O 函数是 <tt class="docutils literal">read</tt> ，它包含了一个完整的 Lisp 语法分析器，以及 <tt class="docutils literal">format</tt> ，它基由模版来产生输出。</li>
+<li>你可以用 <tt class="docutils literal">let</tt> 来创造新的局域变量，用 <tt class="docutils literal">defparameter</tt> 来创造全域变量。</li>
+<li>赋值操作符是 <tt class="docutils literal">setf</tt> 。它的第一个参数可以是一个表达式。</li>
+<li>函数式编程，意味着避免产生副作用，是 Lisp 的主导思维。</li>
+<li>基本的迭代操作符是 <tt class="docutils literal">do</tt> 。</li>
+<li>作为一般 Lisp 对象的函数。它们可以被当成参数传入，并可以用 lambda 表达式来表示。</li>
+<li>在 Lisp 中，数值有类型，而不是变量。</li>
+</ol>
+
+
+<h1>Chapter 2 习题 (Exercises)</h1>
+<ol class="arabic simple">
+<li>描述下列表达式求值后的结果：</li>
+</ol>
+<pre class="literal-block">
+(a) (+ (- 5 1) (+ 3 7))
+
+(b) (list 1 (+ 2 3))
+
+(c) (if (listp 1) (+ 1 2) (+ 3 4))
+
+(d) (list (and (listp 3) t) (+ 1 2))
+</pre>
+<ol class="arabic simple" start="2">
+<li>给出 3 种不同表示 <tt class="docutils literal">(abc)</tt> 的 <tt class="docutils literal">cons 表达式</tt> 。</li>
+<li>使用 <tt class="docutils literal">car</tt> 与 <tt class="docutils literal">cdr</tt> ，定义一个函数，它返回一个列表的第四个元素。</li>
+<li>定义一个函数，接受两个参数，返回两者当中较大的那个。</li>
+<li>这些函数做了什么？</li>
+</ol>
+<pre class="literal-block">
+(a) (defun enigma (x)
+      (and (not (null x))
+           (or (null (car x))
+               (enigma (cdr x)))))
+
+(b) (defun mystery (x y)
+      (if (null y)
+          nil
+          (if (eql (car y) x)
+              0
+              (let ((z (mystery x (cdr y))))
+                (and z (+ z 1))))))
+</pre>
+<ol class="arabic simple" start="6">
+<li>下列表达式， <tt class="docutils literal">x</tt> 该是什么，会得到相同的结果？</li>
+</ol>
+<pre class="literal-block">
+(a) &gt; (car (x (cdr '(a (b c) d))))
+    B
+(b) &gt; (x 13 (/ 1 0))
+    13
+(c) &gt; (x #'list 1 nil)
+    (1)
+</pre>
+<ol class="arabic simple" start="7">
+<li>只使用本章所介绍的操作符，定义一个函数，它接受一个列表作为参数，如果有一个元素是列表就返回真。</li>
+<li>给出函数的迭代与递归版本：</li>
+</ol>
+<ol class="loweralpha simple">
+<li>接受一个正整数，并打印出这么多数目的点。</li>
+<li>接受一个列表，并返回 <tt class="docutils literal">a</tt> 在列表中出现的次数。</li>
+</ol>
+<ol class="arabic simple" start="9">
+<li>一位朋友想写一个函数，它返回列表中所有非 <tt class="docutils literal">nil</tt> 元素的和。他写了此函数的两个版本，但两个都不能工作。请解释每一个的错误在哪里，并给出正确的版本。</li>
+</ol>
+<pre class="literal-block">
+(a) (defun summit (lst)
+      (remove nil lst)
+      (apply #'+ lst))
+
+(b) (defun summit (lst)
+      (let ((x (car lst)))
+        (if (null x)
+            (summit (cdr lst))
+            (+ x (summit (cdr lst))))))
+</pre>

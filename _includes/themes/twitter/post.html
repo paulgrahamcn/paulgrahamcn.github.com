@@ -47,7 +47,11 @@
     {% if tag[0] == page.tags[0] %}
     <ul>
       {% assign pages_list = tag[1] %}  
+      {% if page.tags[0] == "acl" %}
+      {% include JB/reverse_pages_list %}
+      {% else %}
       {% include JB/pages_list %}
+      {% endif %}
     </ul>
     {% endif %}
   {% endfor %}
