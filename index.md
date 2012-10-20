@@ -4,16 +4,7 @@ title: PG中文
 ---
 {% include JB/setup %}
 
-<ul class="tag_box inline">
-  {% assign tags_list = site.tags %}  
-  {% include JB/tags_list %}
-</ul>
-
-
-{% for tag in site.tags %} 
-  <h2 id="{{ tag[0] }}-ref">{{ tag[0] }}</h2>
-  <ul>
-    {% assign pages_list = tag[1] %}  
-    {% include JB/pages_list %}
-  </ul>
-{% endfor %}
+<a href="{{ BASE_PATH }}/lists.html">文章列表</a>
+<a href="{{ BASE_PATH }}/acl.html">ANSI Common Lisp</a>
+<a href="{{ BASE_PATH }}/faq.html">FAQs</a>
+<a href="{{ BASE_PATH }}/relate.html">其它相关</a>
