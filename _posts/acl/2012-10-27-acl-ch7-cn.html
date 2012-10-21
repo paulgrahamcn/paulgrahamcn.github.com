@@ -1,0 +1,449 @@
+---
+layout: post
+title : "第7章--输入与输出"
+category : acl
+tags : [acl]
+---
+{% include JB/setup %}
+
+Common Lisp 有着威力强大的 I/O 工具。针对输入以及一些普遍读取字符的函数，我们有 <tt class="docutils literal">read</tt> ，包含了一个完整的解析器 (parser)。针对输出以及一些普遍写出字符的函数，我们有 <tt class="docutils literal">format</tt> ，它自己几乎就是一个语言。本章介绍了所有基本的概念。<br/><br/>
+Common Lisp 有两种流 (streams)，字符流与二进制流。本章描述了字符流的操作；二进制流的操作涵盖在 14.2 节。<br/><br/>
+
+<h1>7.1 流 (Streams)</h1>
+流是用来表示字符来源与/或终点的 Lisp 对象。要从文件读取或写入，你将文件作为流打开。但流与文件是不一样的。当你在顶层读入或印出时，你也可以使用流。你甚至可以创建可以读取或写入字串的流。<br/><br/>
+输入缺省是从 <tt class="docutils literal"><span class="pre">*standard-input*</span></tt> 流读取。输出缺省是在 <tt class="docutils literal"><span class="pre">*standard-output*</span></tt> 流。最初它们大概会在相同的地方：一个表示顶层的流。<br/><br/>
+我们已经看过 <tt class="docutils literal">read</tt> 与 <tt class="docutils literal">format</tt> 是如何在顶层读取与印出。前者接受一个应是流的选择性参数，缺省是 <tt class="docutils literal"><span class="pre">*standard-input*</span></tt> 。 <tt class="docutils literal">format</tt> 的第一个参数也可以是一个流，但当它是 <tt class="docutils literal">t</tt> 时，输出被送到 <tt class="docutils literal"><span class="pre">*standard-output*</span></tt> 。所以我们目前为止都只用到缺省的流而已。我们可以在任何流上面做同样的 I/O 操作。<br/><br/>
+一个路径名 (pathname) 是一种可携的方式 (portable way)来指定一个文件。一个路径名有六个部分：host, device, directory, name, type 及 version。你可以通过调用 <tt class="docutils literal"><span class="pre">make-pathname</span></tt> 搭配一个或多个对应的关键字参数来产生一个路径。在最简单的情况下，你可以只指明名字，让其他的部分留为缺省：<br/><br/>
+
+&gt; (setf path (make-pathname :name &quot;myfile&quot;))
+      #P&quot;myfile&quot;
+</pre>
+开启一个文件的基本函数是 <tt class="docutils literal">open</tt> 。它接受一个路径名 <a class="footnote-reference" href="#id4" id="id1">[1]</a> 以及大量的选择性关键字参数，而若是开启成功时，返回一个指向文件的流。<br/><br/>
+你可以在创建流时，指定你想要怎么使用它。 无论你是要写入流、从流读取或是两者皆是，<tt class="docutils literal">direction</tt> 参数都会侦测到。三个对应的数值是 <tt class="docutils literal">:input</tt> , <tt class="docutils literal">output</tt> , <tt class="docutils literal">:io</tt> 。如果是用来输出的流， <tt class="docutils literal"><span class="pre">if-exists</span></tt> 参数说明了如果文件已经存在时该怎么做；通常它应该是 <tt class="docutils literal">:supercede</tt> (译注: 取代)。所以要创建一个可以写至 <tt class="docutils literal">&quot;myfile&quot;</tt> 文件的流，你可以：<br/><br/>
+
+&gt; (setf str (open path :direction :output
+                       :if-exists :supercede))
+#&lt;Stream C017E6&gt;
+</pre>
+流的印出表示法 (printed-representation) 因实现而异 (implementation-dependent)。<br/><br/>
+现在我们可以把这个流作为第一个参数传给 <tt class="docutils literal">format</tt> ，它会在流印出，而不是顶层：<br/><br/>
+
+&gt; (format str &quot;Something~%&quot;)
+NIL
+</pre>
+如果我们在此时检视这个文件，输出也许会、也许不会在那里。某些实现会将输出储存成一块 (chunks)再写出。它也许不会出现，直到我们将流关闭：<br/><br/>
+
+&gt; (close str)
+NIL
+</pre>
+当你使用完时，永远记得关闭文件；在你还没关闭之前，内容是不保证会出现的。现在如果我们检视文件 &quot;myfile&quot; ，应该有一行：<br/><br/>
+
+Something
+</pre>
+如果我们只想从一个文件读取，我们可以开启一个具有 <tt class="docutils literal">:direction :input</tt> 的流 ：<br/><br/>
+
+&gt; (setf str (open path :direction :input))
+#&lt;Stream C01C86&gt;
+</pre>
+我们可以对一个文件使用任何输入函数。7.2 节会更详细的描述输入。这里作为一个示例，我们将使用 <tt class="docutils literal"><span class="pre">read-line</span></tt> 从文件来读取一行文字：<br/><br/>
+
+&gt; (read-line str)
+&quot;Something&quot;
+&gt; (close str)
+NIL
+</pre>
+当你读取完毕时，记得关闭文件。<br/><br/>
+大部分时间我们不使用 <tt class="docutils literal">open</tt> 与 <tt class="docutils literal">close</tt> 来操作文件的 I/O 。 <tt class="docutils literal"><span class="pre">with-open-file</span></tt> 宏通常更方便。它的第一个参数应该是一个列表，包含了变数名、伴随着你想传给 <tt class="docutils literal">open</tt> 的参数。在这之後，它接受一个代码主体，它会被绑定至流的变数一起被求值，其中流是通过将剩馀的参数传给 <tt class="docutils literal">open</tt> 来创建的。之後这个流会被自动关闭。所以整个文件写入动作可以表示为：<br/><br/>
+
+(with-open-file (str path :direction :output
+                          :if-exists :supercede)
+  (format str &quot;Something~%&quot;))
+</pre>
+<tt class="docutils literal"><span class="pre">with-open-file</span></tt> 宏将 <tt class="docutils literal">close</tt> 放在 <tt class="docutils literal"><span class="pre">unwind-protect</span></tt> 里 (参见 92 页，译注: 5.6 节)，即使一个错误打断了主体的求值，文件是保证会被关闭的。<br/><br/>
+
+
+<h1>7.2 输入 (Input)</h1>
+两个最受欢迎的输入函数是 <tt class="docutils literal"><span class="pre">read-line</span></tt> 及 <tt class="docutils literal">read</tt> 。前者读入换行符 (newline)之前的所有字符，并用字串返回它们。它接受一个选择性流参数 (optional stream argument)；若流忽略时，缺省为 <tt class="docutils literal"><span class="pre">*standard-input*</span></tt> :<br/><br/>
+
+&gt; (progn
+    (format t &quot;Please enter your name: &quot;)
+    (read-line))
+Please enter your name: Rodrigo de Bivar
+&quot;Rodrigo de Bivar&quot;
+NIL
+</pre>
+译注: Rodrigo de Bivar 人称熙德 (El cid)，十一世纪的西班牙民族英雄。<br/><br/>
+如果你想要原封不动的输出，这是你该用的函数。(第二个返回值只在 <tt class="docutils literal"><span class="pre">read-line</span></tt> 在遇到换行符之前，用尽输入时返回真。)<br/><br/>
+在一般情况下， <tt class="docutils literal"><span class="pre">read-line</span></tt> 接受四个选择性参数: 一个流；一个参数用来决定遇到 <tt class="docutils literal"><span class="pre">end-of-file</span></tt> 时，是否产生错误；若前一个参数为 <tt class="docutils literal">nil</tt> 时，该返回什么；第四个参数 (在 235 页讨论)通常可以省略。<br/><br/>
+所以要在顶层显示一个文件的内容，我们可以使用下面这个函数：<br/><br/>
+
+(defun pseudo-cat (file)
+  (with-open-file (str file :direction :input)
+    (do ((line (read-line str nil 'eof)
+               (read-line str nil 'eof)))
+        ((eql line 'eof))
+      (format t &quot;~A~%&quot; line))))
+</pre>
+如果我们想要把输入解析为 Lisp 对象，使用 <tt class="docutils literal">read</tt> 。这个函数恰好读取一个表达式，在表达式结束时停止读取。所以可以读取多於或少於一行。而当然它所读取的内容必须是合法的 Lisp 语法。<br/><br/>
+如果我们在顶层使用 <tt class="docutils literal">read</tt> ，它会让我们在表达式里面，想用几个换行符就用几个：<br/><br/>
+
+&gt; (read)
+(a
+b
+c)
+(A B C)
+</pre>
+换句话说，如果我们在一行里面输入许多表达式， <tt class="docutils literal">read</tt> 会在第一个表达式之後，停止处理字符，留下剩馀的字符给之後读取这个流的函数处理。所以如果我们在一行输入多个表达式，来回应 <tt class="docutils literal"><span class="pre">ask-number</span></tt> (20 页。译注：2.10 小节)所印出提示符，会发生如下情形:<br/><br/>
+
+&gt; (ask-number)
+Please enter a number. a b
+Please enter a number. Please enter a number. 43
+43
+</pre>
+两个连续的提示符 (successive prompts)在第二行被印出。第一个 <tt class="docutils literal">read</tt> 调用会返回 <tt class="docutils literal">a</tt> ，而它不是一个数字，所以函数再次要求一个数字。但第一个 <tt class="docutils literal">read</tt>      只读取到 <tt class="docutils literal">a</tt> 的结尾。所以下一个 <tt class="docutils literal">read</tt> 调用返回 <tt class="docutils literal">b</tt> ，导致了下一个提示符。<br/><br/>
+你或许想要避免使用 <tt class="docutils literal">read</tt> 来直接处理使用者的输入。前述的函数若使用 <tt class="docutils literal"><span class="pre">read-line</span></tt> 来获得使用者输入会比较好，然後对结果字串调用 <tt class="docutils literal"><span class="pre">read-from-string</span></tt> 。这个函数接受一个字串，并返回第一个读取的表达式:<br/><br/>
+
+&gt; (read-from-string &quot;a b c&quot;)
+A
+2
+</pre>
+它同时返回第二个值，一个指出停止读取字串时的位置的数字。<br/><br/>
+在一般情况下， <tt class="docutils literal"><span class="pre">read-from-string</span></tt> 可以接受两个选择性参数与三个关键字参数。两个选择性参数是 <tt class="docutils literal">read</tt> 的第三、第四个参数: 一个 end-of-file (这个情况是字串) 決定是否报错，若不报错该返回什么。关键字参数 <tt class="docutils literal">:start</tt> 及 <tt class="docutils literal">:end</tt> 可以用来划分从字串的哪里开始读。<br/><br/>
+所有的这些输入函数是由基本函数 (primitive) <tt class="docutils literal"><span class="pre">read-char</span></tt> 所定义的，它读取一个字符。它接受四个与 <tt class="docutils literal">read</tt> 及 <tt class="docutils literal"><span class="pre">read-line</span></tt> 一样的选择性参数。Common Lisp 也定义一个函数叫做 <tt class="docutils literal"><span class="pre">peek-char</span></tt> ，跟 <tt class="docutils literal"><span class="pre">read-char</span></tt> 类似，但不会将字符从流中移除。<br/><br/>
+
+
+<h1>7.3 输出 (Output)</h1>
+三个最简单的输出函数是 <tt class="docutils literal">prin1</tt> , <tt class="docutils literal">princ</tt> 以及 <tt class="docutils literal">terpri</tt> 。这三个函数的最後一个参数皆为选择性的流参数，缺省是 <tt class="docutils literal"><span class="pre">*standard-output*</span></tt> 。<br/><br/>
+<tt class="docutils literal">princ1</tt> 与 <tt class="docutils literal">princ</tt> 的差别大致在於 <tt class="docutils literal">prin1</tt> 给程序产生输出，而 <tt class="docutils literal">princ</tt> 给人类产生输出。所以举例来说， <tt class="docutils literal">prin1</tt> 会印出字串左右的双引号，而 <tt class="docutils literal">princ</tt> 不会:<br/><br/>
+
+&gt; (prin1 &quot;Hello&quot;)
+&quot;Hello&quot;
+&quot;Hello&quot;
+&gt; (princ &quot;Hello&quot;)
+Hello
+&quot;Hello&quot;
+</pre>
+两者皆返回它们的第一个参数 (译注: 第二个值是返回值) –– 顺道一提，是用 <tt class="docutils literal">prin1</tt> 印出。 <tt class="docutils literal">terpri</tt> 仅印出一新行。<br/><br/>
+有这些函数的背景知识在解释更为通用的 <tt class="docutils literal">format</tt> 是很有用的。这个函数几乎可以用在所有的输出。他接受一个流 (或 <tt class="docutils literal">t</tt> 或 <tt class="docutils literal">nil</tt> )、一个格式化字串 (format string)以及零个或多个额外的参数。格式化字串可以包含特定的格式化指令 (format directives)，这些指令前面有波浪号 <tt class="docutils literal">~</tt> 。某些格式化指令作为字串的占位符 (placeholder)使用。这些位置会被格式化字串之後，所给入参数的表示法所取代。<br/><br/>
+如果我们把 <tt class="docutils literal">t</tt> 作为第一个参数，输出会被送至 <tt class="docutils literal"><span class="pre">*standard-output*</span></tt> 。如果我们给 <tt class="docutils literal">nil</tt> ， <tt class="docutils literal">format</tt> 会返回一个它会如何印出的字串。为了保持简短，我们会在所有的示例里演示怎么做。<br/><br/>
+由於每人的观点不同， <tt class="docutils literal">format</tt> 可以是令人惊讶的强大或是极为可怕的复杂。有大量的格式化指令可用，而只有少部分会被大多数程序设计师使用。两个最常用的格式化指令是 <tt class="docutils literal">~A</tt> 以及 <tt class="docutils literal">~%</tt> 。(你使用 <tt class="docutils literal">~a</tt> 或 <tt class="docutils literal">~A</tt> 都没关系，但後者较常见，因为它让格式化指令看起来一目了然。) 一个 <tt class="docutils literal">~A</tt> 是一个值的占位符，它会像是用 <tt class="docutils literal">princ</tt> 印出一般。一个 <tt class="docutils literal">~%</tt> 代表着一个换行符 (newline)。<br/><br/>
+
+&gt; (format nil &quot;Dear ~A, ~% Our records indicate...&quot;
+                                                        &quot;Mr. Malatesta&quot;)
+&quot;Dear Mr. Malatesta,
+   Our records indicate...&quot;
+</pre>
+这里 <tt class="docutils literal">format</tt> 返回了一个值，由一个含有换行符的字串组成。<br/><br/>
+<tt class="docutils literal">~S</tt> 格式化指令像是 <tt class="docutils literal">~A</tt> ，但它使用 <tt class="docutils literal">prin1</tt> 印出对象，而不是 <tt class="docutils literal">princ</tt> 印出:<br/><br/>
+
+&gt; (format t &quot;~S  ~A&quot; &quot;z&quot; &quot;z&quot;)
+&quot;z&quot; z
+NIL
+</pre>
+格式化指令可以接受参数。 <tt class="docutils literal">~F</tt> 用来印出向右对齐 (right-justified)的浮点数，可接受五个参数:<br/><br/>
+<ol class="arabic simple">
+<li>要印出字符的总数。缺省是数字的长度。</li>
+<li>小数之後要印几位数。缺省是全部。</li>
+<li>小数点要往左移几位 (即等同於将数字乘 10)。缺省是没有。</li>
+<li>若数字太长无法满足第一个参数时，所要印出的字符。如果没有指定字符，一个过长的数字会尽可能使用它所需的空间被印出。</li>
+<li>数字开始印之前左边的字符。缺省是空白。</li>
+</ol>
+下面是一个有五个参数的罕见例子:<br/><br/>
+
+? (format nil &quot;~10,2,0,'*,' F&quot; 26.21875)
+&quot;     26.22&quot;
+</pre>
+这是原本的数字取至小数点第二位、(小数点向左移 0 位)、在 10 个字符的空间里向右对齐，左边补满空白。注意作为参数给入是写成 <tt class="docutils literal">'*</tt> 而不是 <tt class="docutils literal">#\*</tt> 。由於数字塞得下 10 个字符，不需要使用第四个参数。<br/><br/>
+所有的这些参数都是选择性的。要使用缺省值你可以直接忽略对应的参数。如果我们想要做的是，印出一个小数点取至第二位的数字，我们可以说:<br/><br/>
+
+&gt; (format nil &quot;~,2,,,F&quot; 26.21875)
+&quot;26.22&quot;
+</pre>
+你也可以忽略一系列的尾随逗号 (trailing commas)，前面指令更常见的写法会是:<br/><br/>
+
+&gt; (format nil &quot;~,2F&quot; 26.21875)
+&quot;26.22&quot;
+</pre>
+<strong>警告:</strong> 当 <tt class="docutils literal">format</tt> 取整数时，它不保证会向上进位或向下舍入。就是说 <tt class="docutils literal">(format nil <span class="pre">&quot;~,1F&quot;</span> 1.25)</tt> 可能会是 <tt class="docutils literal">&quot;1.2&quot;</tt> 或 <tt class="docutils literal">&quot;1.3&quot;</tt> 。所以如果你使用 <tt class="docutils literal">format</tt> 来显示资讯时，而使用者期望看到某种特定取整数方式的数字 (如: 金额数量)，你应该在印出之前先显式地取好整数。<br/><br/>
+
+
+<h1>7.4 示例：字串代换 (Example: String Substitution)</h1>
+作为一个 I/O 的示例，本节演示如何写一个简单的程序来对文本文件做字串替换。我们即将写一个可以将一个文件中，旧的字串 <tt class="docutils literal">old</tt> 换成某个新的字串 <tt class="docutils literal">new</tt> 的函数。最简单的实现方式是将输入文件里的每一个字符与 <tt class="docutils literal">old</tt> 的第一个字符比较。如果没有匹配，我们可以直接印出该字符至输出。如果匹配了，我们可以将输入的下一个字符与 <tt class="docutils literal">old</tt> 的第二个字符比较，等等。如果输入字符与 <tt class="docutils literal">old</tt> 完全相等时，我们有一个成功的匹配，则我们印出 <tt class="docutils literal">new</tt> 至文件。<br/><br/>
+而要是 <tt class="docutils literal">old</tt> 在匹配途中失败了，会发生什么事呢？举例来说，假设我们要找的模式 (pattern)是 <tt class="docutils literal">&quot;abac&quot;</tt> ，而输入文件包含的是 <tt class="docutils literal">&quot;ababac&quot;</tt> 。输入会一直到第四个字符才发现不匹配，也就是在模式中的 <tt class="docutils literal">c</tt> 以及输入的 <tt class="docutils literal">b</tt> 才发现。在此时我们可以将原本的 <tt class="docutils literal">a</tt> 写至输出文件，因为我们已经知道这里没有匹配。但有些我们从输入读入的字符还是需要留着: 举例来说，第三个 <tt class="docutils literal">a</tt> ，确实是成功匹配的开始。所以在我们要实现这个算法之前，我们需要一个地方来储存，我们已经从输入读入的字符，但之后仍然需要的字符。<br/><br/>
+一个暂时储存输入的队列 (queue)称作缓冲区 (buffer)。在这个情况里，因为我们知道我们不需要储存超过一个预定的字符量，我们可以使用一个叫做环状缓冲区 <tt class="docutils literal">ring buffer</tt> 的资料结构。一个环状缓冲区实际上是一个向量。是使用的方式使其成为环状: 我们将之後的元素所输入进来的值储存起来，而当我们到达向量结尾时，我们重头开始。如果我们不需要储存超过 <tt class="docutils literal">n</tt> 个值，则我们只需要一个长度为 <tt class="docutils literal">n</tt> 或是大於 <tt class="docutils literal">n</tt> 的向量，这样我们就不需要覆写正在用的值。<br/><br/>
+在图 7.1 的代码，实现了环状缓冲区的操作。 <tt class="docutils literal">buf</tt> 有五个栏位 (field): 一个包含存入缓冲区的向量，四个其它栏位用来放指向向量的索引 (indices)。两个索引是 <tt class="docutils literal">start</tt> 与 <tt class="docutils literal">end</tt> ，任何环状缓冲区的使用都会需要这两个索引: <tt class="docutils literal">start</tt> 指向缓冲区的第一个值，当我们取出一个值时， <tt class="docutils literal">start</tt> 会递增 (incremented)； <tt class="docutils literal">end</tt> 指向缓冲区的最後一个值，当我们插入一个新值时， <tt class="docutils literal">end</tt> 会递增。<br/><br/>
+另外两个索引， <tt class="docutils literal">used</tt> 以及 <tt class="docutils literal">new</tt> ，是我们需要给这个应用的基本环状缓冲区所加入的东西。它们会介於 <tt class="docutils literal">start</tt> 与 <tt class="docutils literal">end</tt> 之间。实际上，它总是符合<br/><br/>
+
+start ≤ used ≤ new ≤ end
+</pre>
+你可以把 <tt class="docutils literal">used</tt> 与 <tt class="docutils literal">new</tt> 想成是当前匹配 (current match) 的 <tt class="docutils literal">start</tt> 与 <tt class="docutils literal">end</tt> 。当我们开始一轮匹配时， <tt class="docutils literal">used</tt> 会等於 <tt class="docutils literal">start</tt> 而 <tt class="docutils literal">new</tt> 会等於 <tt class="docutils literal">end</tt> 。当下一个字符 (successive character)匹配时，我们需要递增 <tt class="docutils literal">used</tt> 。当 <tt class="docutils literal">used</tt> 与 <tt class="docutils literal">new</tt> 相等时，我们将开始匹配时，所有存在缓冲区的字符读入。我们不想要使用超过从匹配时所存在缓冲区的字符，或是重复使用同样的字符。因此这个 <tt class="docutils literal">new</tt> 索引，开始等於 <tt class="docutils literal">end</tt> ，但它不会在一轮匹配我们插入新字符至缓冲区一起递增。<br/><br/>
+函数 <tt class="docutils literal">bref</tt> 接受一个缓冲区与一个索引，并返回索引所在位置的元素。藉由使用 <tt class="docutils literal">index</tt> 对向量的长度取 <tt class="docutils literal">mod</tt> ，我们可以假装我们有一个任意长的缓冲区。调用 <tt class="docutils literal"><span class="pre">(new-buf</span> n)</tt> 会产生一个新的缓冲区，能够容纳 <tt class="docutils literal">n</tt> 个对象。<br/><br/>
+要插入一个新值至缓冲区，我们将使用 <tt class="docutils literal"><span class="pre">buf-insert</span></tt> 。它将 <tt class="docutils literal">end</tt> 递增，并把新的值放在那个位置 (译注: 递增完的位置)。相反的 <tt class="docutils literal"><span class="pre">buf-pop</span></tt> 返回一个缓冲区的第一个数值，接着将 <tt class="docutils literal">start</tt> 递增。任何环状缓冲区都会有这两个函数。<br/><br/>
+
+(defstruct buf
+  vec (start -1) (used -1) (new -1) (end -1))
+
+(defun bref (buf n)
+  (svref (buf-vec buf)
+         (mod n (length (buf-vec buf)))))
+
+(defun (setf bref) (val buf n)
+  (setf (svref (buf-vec buf)
+               (mod n (length (buf-vec buf))))
+        val))
+
+(defun new-buf (len)
+  (make-buf :vec (make-array len)))
+
+(defun buf-insert (x b)
+  (setf (bref b (incf (buf-end b))) x))
+
+(defun buf-pop (b)
+  (prog1
+    (bref b (incf (buf-start b)))
+    (setf (buf-used b) (buf-start b)
+          (buf-new  b) (buf-end   b))))
+
+(defun buf-next (b)
+  (when (&lt; (buf-used b) (buf-new b))
+    (bref b (incf (buf-used b)))))
+
+(defun buf-reset (b)
+  (setf (buf-used b) (buf-start b)
+        (buf-new  b) (buf-end   b)))
+
+(defun buf-clear (b)
+  (setf (buf-start b) -1 (buf-used  b) -1
+        (buf-new   b) -1 (buf-end   b) -1))
+
+(defun buf-flush (b str)
+  (do ((i (1+ (buf-used b)) (1+ i)))
+      ((&gt; i (buf-end b)))
+    (princ (bref b i) str)))
+</pre>
+<strong>图 7.1 环状缓冲区的操作</strong><br/><br/>
+接下来我们需要两个特别为这个应用所写的函数: <tt class="docutils literal"><span class="pre">buf-next</span></tt> 从缓冲区读取一个值而不取出，而 <tt class="docutils literal"><span class="pre">buf-reset</span></tt> 重置 <tt class="docutils literal">used</tt> 与 <tt class="docutils literal">new</tt> 到初始值，分别是 <tt class="docutils literal">start</tt> 与 <tt class="docutils literal">end</tt> 。如果我们已经把至 <tt class="docutils literal">new</tt> 的值全部读取完毕时， <tt class="docutils literal"><span class="pre">buf-next</span></tt> 返回 <tt class="docutils literal">nil</tt> 。区别这个值与实际的值不会产生问题，因为我们只把值存在缓冲区。<br/><br/>
+最後 <tt class="docutils literal"><span class="pre">buf-flush</span></tt> 透过将所有作用的元素，写至由第二个参数所给入的流，而 <tt class="docutils literal"><span class="pre">buf-clear</span></tt> 通过重置所有的索引至 <tt class="docutils literal"><span class="pre">-1</span></tt> 将缓冲区清空。<br/><br/>
+在图 7.1 定义的函数被图 7.2 所使用，包含了字串替换的代码。函数 <tt class="docutils literal"><span class="pre">file-subst</span></tt> 接受四个参数；一个查询字串，一个替换字串，一个输入文件以及一个输出文件。它创建了代表每个文件的流，然後调用 <tt class="docutils literal"><span class="pre">stream-subst</span></tt> 来完成实际的工作。<br/><br/>
+第二个函数 <tt class="docutils literal"><span class="pre">stream-subst</span></tt> 使用本节开始所勾勒的算法。它一次从输入流读一个字符。直到输入字符匹配要寻找的字串时，直接写至输出流 (1)。当一个匹配开始时，有关字符在缓冲区 <tt class="docutils literal">buf</tt> 排队等候 (2)。<br/><br/>
+变数 <tt class="docutils literal">pos</tt> 指向我们想要匹配的字符在寻找字串的所在位置。如果 <tt class="docutils literal">pos</tt> 等於这个字串的长度，我们有一个完整的匹配，则我们将替换字串写至输出流，并清空缓冲区 (3)。如果在这之前匹配失败，我们可以将缓冲区的第一个元素取出，并写至输出流，之後我们重置缓冲区，并从 <tt class="docutils literal">pos</tt> 等於 0 重新开始 (4)。<br/><br/>
+
+(defun file-subst (old new file1 file2)
+  (with-open-file (in file1 :direction :input)
+     (with-open-file (out file2 :direction :output
+                                :if-exists :supersede)
+       (stream-subst old new in out))))
+
+(defun stream-subst (old new in out)
+  (let* ((pos 0)
+         (len (length old))
+         (buf (new-buf len))
+         (from-buf nil))
+    (do ((c (read-char in nil :eof)
+            (or (setf from-buf (buf-next buf))
+                (read-char in nil :eof))))
+        ((eql c :eof))
+      (cond ((char= c (char old pos))
+             (incf pos)
+             (cond ((= pos len)            ; 3
+                    (princ new out)
+                    (setf pos 0)
+                    (buf-clear buf))
+                   ((not from-buf)         ; 2
+                    (buf-insert c buf))))
+            ((zerop pos)                   ; 1
+             (princ c out)
+             (when from-buf
+               (buf-pop buf)
+               (buf-reset buf)))
+            (t                             ; 4
+             (unless from-buf
+               (buf-insert c buf))
+             (princ (buf-pop buf) out)
+             (buf-reset buf)
+             (setf pos 0))))
+    (buf-flush buf out)))
+</pre>
+<strong>图 7.2 字串替换</strong><br/><br/>
+下列表格展示了当我们将文件中的 <tt class="docutils literal">&quot;baro&quot;</tt> 替换成 <tt class="docutils literal">&quot;baric&quot;</tt> 所发生的事，其中文件只有一个单字 <tt class="docutils literal">&quot;barbarous&quot;</tt> :<br/><br/>
+<table border="1" class="docutils">
+<colgroup>
+<col width="20%" />
+<col width="19%" />
+<col width="13%" />
+<col width="11%" />
+<col width="15%" />
+<col width="22%" />
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">CHARACTER</th>
+<th class="head">SOURCE</th>
+<th class="head">MATCH</th>
+<th class="head">CASE</th>
+<th class="head">OUTPUT</th>
+<th class="head">BUFFER</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr><td>b</td>
+<td>file</td>
+<td>b</td>
+<td>2</td>
+<td>&nbsp;</td>
+<td>b</td>
+</tr>
+<tr><td>a</td>
+<td>file</td>
+<td>a</td>
+<td>2</td>
+<td>&nbsp;</td>
+<td>b a</td>
+</tr>
+<tr><td>r</td>
+<td>file</td>
+<td>r</td>
+<td>2</td>
+<td>&nbsp;</td>
+<td>b a r</td>
+</tr>
+<tr><td>b</td>
+<td>file</td>
+<td>o</td>
+<td>4</td>
+<td>b</td>
+<td>b.a r b.</td>
+</tr>
+<tr><td>a</td>
+<td>buffer</td>
+<td>b</td>
+<td>1</td>
+<td>a</td>
+<td>a.r b.</td>
+</tr>
+<tr><td>r</td>
+<td>buffer</td>
+<td>b</td>
+<td>1</td>
+<td>r</td>
+<td>r.b.</td>
+</tr>
+<tr><td>b</td>
+<td>buffer</td>
+<td>b</td>
+<td>1</td>
+<td>&nbsp;</td>
+<td>r b:</td>
+</tr>
+<tr><td>a</td>
+<td>file</td>
+<td>a</td>
+<td>2</td>
+<td>&nbsp;</td>
+<td>r b:a</td>
+</tr>
+<tr><td>r</td>
+<td>file</td>
+<td>r</td>
+<td>2</td>
+<td>&nbsp;</td>
+<td>r b:a</td>
+</tr>
+<tr><td>o</td>
+<td>file</td>
+<td>o</td>
+<td>3</td>
+<td>baric</td>
+<td>r b:a r</td>
+</tr>
+<tr><td>u</td>
+<td>file</td>
+<td>b</td>
+<td>1</td>
+<td>u</td>
+<td>&nbsp;</td>
+</tr>
+<tr><td>a</td>
+<td>file</td>
+<td>b</td>
+<td>1</td>
+<td>s</td>
+<td>&nbsp;</td>
+</tr>
+</tbody>
+</table>
+第一栏是当前字符 –– <tt class="docutils literal">c</tt> 的值；第二栏显示是从缓冲区或是直接从输入流读取；第三栏显示需要匹配的字符 –– <tt class="docutils literal">old</tt> 的第 <strong>posth</strong> 字符；第四栏显示那一个条件式 (case)被求值作为结果；第五栏显示被写至输出流的字符；而最後一栏显示缓冲区之後的内容。在最後一栏里， <tt class="docutils literal">used</tt> 与 <tt class="docutils literal">new</tt> 的位置一样，由一个冒号 ( <tt class="docutils literal">:</tt> colon)表示。<br/><br/>
+在文件 <tt class="docutils literal">&quot;test1&quot;</tt> 里有如下文字：<br/><br/>
+
+The struggle between Liberty and Authority is the most conspicuous feature
+in the portions of history with which we are earliest familiar, particularly
+in that of Greece, Rome, and England.
+</pre>
+在我们对 <tt class="docutils literal"><span class="pre">(file-subst</span> &quot; th&quot; &quot; z&quot; &quot;test1&quot; &quot;test2&quot;)</tt> 求值之後，读取文件 <tt class="docutils literal">&quot;test2&quot;</tt> 为:<br/><br/>
+
+The struggle between Liberty and Authority is ze most conspicuous feature
+in ze portions of history with which we are earliest familiar, particularly
+in zat of Greece, Rome, and England.
+</pre>
+为了使这个例子尽可能的简单，图 7.2 的代码只将一个字串换成另一个字串。很容易扩展为搜索一个模式而不是一个字面字串。你只需要做的是，将 <tt class="docutils literal">char=</tt> 调用换成一个你想要的更通用的匹配函数调用。<br/><br/>
+
+
+<h1>7.5 宏字符 (Macro Characters)</h1>
+一个宏字符 (macro character)是获得 <tt class="docutils literal">read</tt> 特别待遇的字符。比如小写的 <tt class="docutils literal">a</tt> ，通常与小写 <tt class="docutils literal">b</tt> 一样处理，但一个左括号就不同了: 它告诉 Lisp 开始读入一个列表。<br/><br/>
+一个宏字符或宏字符组合也称作 <tt class="docutils literal"><span class="pre">read-macro</span></tt> (读取宏) 。许多 Common Lisp 预定义的读取宏是缩写。比如说引用 (Quote): 读入一个像是 <tt class="docutils literal">'a</tt> 的表达式时，它被读取器展开成 <tt class="docutils literal">(quote a)</tt> 。当你输入引用的表达式 (quoted expression)至顶层时，它们在读入之时就会被求值，所以一般来说你看不到这样的转换。你可以透过显式调用 <tt class="docutils literal">read</tt> 使其现形:<br/><br/>
+
+&gt; (car (read-from-string &quot;'a&quot;))
+QUOTE
+</pre>
+引用对於读取宏来说是不寻常的，因为它用单一字符表示。有了一个有限的字符集，你可以在 Common Lisp 里有许多单一字符的读取宏，来表示一个或更多字符。<br/><br/>
+这样的读取宏叫做派发 (dispatching)读取宏，而第一个字符叫做派发字符 (dispatching character)。所有预定义的派发读取宏使用井号 ( <tt class="docutils literal">#</tt> )作为派发字符。我们已经见过好几个。举例来说， <tt class="docutils literal">#'</tt> 是 <tt class="docutils literal">(function <span class="pre">...)</span></tt> 的缩写，同样的 <tt class="docutils literal">'</tt> 是 <tt class="docutils literal">(quote <span class="pre">...)</span></tt> 的缩写。<br/><br/>
+其它我们见过的派发读取宏包括 <tt class="docutils literal"><span class="pre">#(...)</span></tt> ，产生一个向量； <tt class="docutils literal"><span class="pre">#nA(...)</span></tt> 产生数组； <tt class="docutils literal">#\</tt> 产生一个字符； <tt class="docutils literal">#S(n <span class="pre">...)</span></tt> 产生一个结构。当这些类型的每个对象被 <tt class="docutils literal">prin1</tt> 显示时 (或是 <tt class="docutils literal">format</tt> 搭配 <tt class="docutils literal">~S</tt>)，它们使用对应的读取宏 <a class="footnote-reference" href="#id5" id="id2">[2]</a> 。这表示着你可以写出或读回这样的对象:<br/><br/>
+
+&gt; (let ((*print-array* t))
+    (vectorp (read-from-string (format nil &quot;~S&quot;
+                                       (vector 1 2)))))
+T
+</pre>
+当然我们拿回来的不是同一个向量，而是具有同样元素的新向量。<br/><br/>
+不是所有对象被显示时都有着清楚 (distinct)、可读的形式。举例来说，函数与哈希表，倾向於这样 <tt class="docutils literal"><span class="pre">#&lt;...&gt;</span></tt> 被显示。实际上 <tt class="docutils literal"><span class="pre">#&lt;...&gt;</span></tt> 也是一个读取宏，但是特别用来产生当遇到 <tt class="docutils literal">read</tt> 的错误。函数与哈希表不能被写出与读回来，而这个读取宏确保使用者不会有这样的幻觉。 <a class="footnote-reference" href="#id6" id="id3">[3]</a><br/><br/>
+当你定义你自己的事物表示法时 (举例来说，结构的印出函数)，你要将此准则记住。要不使用一个可以被读回来的表示法，或是使用 <tt class="docutils literal"><span class="pre">#&lt;...&gt;</span></tt> 。<br/><br/>
+
+
+<h1>Chapter 7 总结 (Summary)</h1>
+<ol class="arabic simple">
+<li>流是输入的来源或终点。在字符流里，输入输出是由字符组成。</li>
+<li>缺省的流指向顶层。新的流可以由开启文件产生。</li>
+<li>你可以解析对象、字符组成的字串、或是单独的字符。</li>
+<li><tt class="docutils literal">format</tt> 函数提供了完整的输出控制。</li>
+<li>为了要替换文本文件中的字串，你需要将字符读入缓冲区。</li>
+<li>当 <tt class="docutils literal">read</tt> 遇到一个宏字符像是 <tt class="docutils literal">'</tt> ，它调用相关的函数。</li>
+</ol>
+
+
+<h1>Chapter 7 练习 (Exercises)</h1>
+<ol class="arabic simple">
+<li>定义一个函数，接受一个文件名并返回一个由字串组成的列表，来表示文件里的每一行。</li>
+<li>定义一个函数，接受一个文件名并返回一个由表达式组成的列表，来表示文件里的每一行。</li>
+<li>假设有某种格式的文件文件，注解是由 <tt class="docutils literal">%</tt> 字符表示。从这个字符开始直到行尾都会被忽略。定义一个函数，接受两个文件名称，并拷贝第一个文件的内容去掉注解，写至第二个文件。</li>
+<li>定义一个函数，接受一个二维浮点数组，将其用简洁的栏位显示。每个元素应印至小数点二位，一栏十个字符宽。（假设所有的字符可以容纳）。你会需要 <tt class="docutils literal"><span class="pre">array-dimensions</span></tt> (参见 361 页，译注: Appendix D)。</li>
+<li>修改 <tt class="docutils literal"><span class="pre">stream-subst</span></tt> 来允许万用字符 (wildcard) 可以在模式中使用。若字符 <tt class="docutils literal">+</tt> 出现在 <tt class="docutils literal">old</tt> 里，它应该匹配任何输入字符。</li>
+<li>修改 <tt class="docutils literal"><span class="pre">stream-subst</span></tt> 来允许模式可以包含一个用来匹配任何数字的元素，以及一个可以匹配任何英文字符的元素或是一个可以匹配任何字符的元素。模式必须可以匹配任何特定的输入字符。(提示: <tt class="docutils literal">old</tt> 可以不是一个字串。)</li>
+</ol>
+脚注<br/><br/>
+<table class="docutils footnote" frame="void" id="id4" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>你可以给一个字串取代路径名，但这样就不可携了 (portable)。</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="id5" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id2">[2]</a></td><td>要让向量与数组这样被显示，将 <tt class="docutils literal"><span class="pre">*print-array*</span></tt> 设为真。</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="id6" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id3">[3]</a></td><td>Lisp 不能只用 <tt class="docutils literal">#'</tt> 来表示函数，因为 <tt class="docutils literal">#'</tt> 本身无法提供表示闭包的方式。</td></tr>
+</tbody>
+</table>

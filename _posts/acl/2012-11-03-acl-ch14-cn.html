@@ -1,0 +1,434 @@
+---
+layout: post
+title : "第14章--进阶议题"
+category : acl
+tags : [acl]
+---
+{% include JB/setup %}
+
+本章是选择性阅读的。本章描述了 Common Lisp 里一些更深奥的特性。Common Lisp 像是一个冰山：大部分的功能对于那些永远不需要他们的多数用户是看不见的。你或许永远不需要自己定义包 (Package)或读取宏 (read-macros)，但当你需要时，有些例子可以让你参考是很有用的。<br/><br/>
+
+<h1>14.1 类型标识符 (Type Specifiers)</h1>
+类型在 Common Lisp 里不是对象。举例来说，没有对象对应到 <tt class="docutils literal">integer</tt> 这个类型。我们从像是 <tt class="docutils literal"><span class="pre">type-of</span></tt> 函数里所获得的，以及作为传给像是 <tt class="docutils literal">typep</tt> 函数的参数，不是一个类型，而是一个类型标识符 (type specifier)。<br/><br/>
+一个类型标识符是一个类型的名称。最简单的类型标识符是像是 <tt class="docutils literal">integer</tt> 的符号。这些符号形成了 Common Lisp 里的类型层级。在层级的最顶端是类型 <tt class="docutils literal">t</tt> –– 所有的对象皆为类型 <tt class="docutils literal">t</tt> 。而类型层级不是一棵树。从 <tt class="docutils literal">nil</tt> 至顶端有两条路，举例来说：一条从 <tt class="docutils literal">atom</tt> ，另一条从 <tt class="docutils literal">list</tt> 与 <tt class="docutils literal">sequence</tt> 。<br/><br/>
+一个类型实际上只是一个对象集合。这意味著有多少类型就有多少个对象的集合：一个无穷大的数目。我们可以用原子的类型标识符 (atomic type specifiers)来表示某些集合：比如 <tt class="docutils literal">integer</tt> 表示所有整数集合。但我们也可以建构一个复合类型标识符 (compound type specifiers)来参照到任何对象的集合。<br/><br/>
+举例来说，如果 <tt class="docutils literal">a</tt> 与 <tt class="docutils literal">b</tt> 是两个类型标识符，则 <tt class="docutils literal">(or a b)</tt> 表示分别由 <tt class="docutils literal">a</tt> 与 <tt class="docutils literal">b</tt> 类型所表示的联集 (union)。也就是说，一个类型 <tt class="docutils literal">(or a b)</tt> 的对象是类型 <tt class="docutils literal">a</tt> 或 类型 <tt class="docutils literal">b</tt> 。<br/><br/>
+如果 <tt class="docutils literal">circular?</tt> 是一个对于 <tt class="docutils literal">cdr</tt> 为环状的列表返回真的函数，则你可以使用适当的序列集合来表示： <a class="footnote-reference" href="#id3" id="id1">[1]</a><br/><br/>
+
+(or vector (and list (not (satisfies circular?))))
+</pre>
+某些原子的类型标识符也可以出现在复合类型标识符。要表示介于 1 至 100 的整数（包含），我们可以用：<br/><br/>
+
+(integer 1 100)
+</pre>
+这样的类型标识符用来表示一个有限的类型 (finite type)。<br/><br/>
+在一个复合类型标识符里，你可以藉由在一个参数的位置使用 <tt class="docutils literal">*</tt> 来留下某些未指定的信息。所以<br/><br/>
+
+(simple-array fixnum (* *))
+</pre>
+描述了指定给 <tt class="docutils literal">fixnum</tt> 使用的二维简单数组 (simple array)集合，而<br/><br/>
+
+(simple-array fixnum *)
+</pre>
+描述了指定给 <tt class="docutils literal">finxnum</tt> 使用的简单数组集合 (前者的超类型 「supertype」)。尾随的星号可以省略，所以上个例子可以写为：<br/><br/>
+
+(simple-array fixnum)
+</pre>
+若一个复合类型标识符没有传入参数，你可以使用一个原子。所以 <tt class="docutils literal"><span class="pre">simple-array</span></tt> 描述了所有简单数组的集合。<br/><br/>
+如果有某些复合类型标识符你想重复使用，你可以使用 <tt class="docutils literal">deftype</tt> 定义一个缩写。这个宏与 <tt class="docutils literal">defmacro</tt> 相似，但会展开成一个类型标识符，而不是一个表达式。通过表达<br/><br/>
+
+(deftype proseq ()
+        '(or vector (and list (not (satisfies circular?)))))
+</pre>
+我们定义了 <tt class="docutils literal">proseq</tt> 作为一个新的原子类型标识符：<br/><br/>
+
+&gt; (typep #(1 2) 'proseq)
+T
+</pre>
+如果你定义一个接受参数的类型标识符，参数会被视为 Lisp 形式（即没有被求值），与 <tt class="docutils literal">defmacro</tt> 一样。所以<br/><br/>
+
+(deftype multiple-of (n)
+  `(and integer (satisfies (lambda (x)
+                             (zerop (mod x ,n))))))
+</pre>
+(译注: 注意上面代码是使用反引号 <tt class="docutils literal">`</tt> )<br/><br/>
+定义了 <cite>(multiple-of n)</cite> 当成所有 <tt class="docutils literal">n</tt> 的倍数的标识符：<br/><br/>
+
+&gt; (type 12 '(multiple-of 4))
+T
+</pre>
+类型标识符会被直译 (interpreted)，因此很慢，所以通常你最好定义一个函数来处理这类的测试。<br/><br/>
+
+
+<h1>14.2 二进制流 (Binary Streams)</h1>
+第 7 章曾提及流有二进制流 (binary streams)以及字符流 (character streams)。一个二进制流是一个整数的来源及/或终点，而不是字符。你通过指定一个整数的子类型来创建一个二进制流 –– 当你打开流时，通常是用 <tt class="docutils literal"><span class="pre">unsigned-byte</span></tt> –– 来作为 <tt class="docutils literal"><span class="pre">:element-type</span></tt> 的参数。<br/><br/>
+关于二进制流的 I/O 函数仅有两个， <tt class="docutils literal"><span class="pre">read-byte</span></tt> 以及 <tt class="docutils literal"><span class="pre">write-byte</span></tt> 。所以下面是你如何定义一个复制一个文件的函数：<br/><br/>
+
+(defun copy-file (from to)
+  (with-open-file (in from :direction :input
+                           :element-type 'unsigned-byte)
+    (with-open-file (out to :direction :output
+                            :element-type 'unsigned-byte)
+      (do ((i (read-byte in nil -1)
+              (read-byte in nil -1)))
+          ((minusp i))
+        (declare (fixnum i))
+        (write-byte i out)))))
+</pre>
+仅通过指定 <tt class="docutils literal"><span class="pre">unsigned-byte</span></tt> 给 <tt class="docutils literal"><span class="pre">:element-type</span></tt> ，你让操作系统选择一个字节 (byte)的长度。举例来说，如果你明确地想要读写 7 比特的整数，你可以使用：<br/><br/>
+
+(unsigned-byte 7)
+</pre>
+来传给 <tt class="docutils literal"><span class="pre">:element-type</span></tt> 。<br/><br/>
+
+
+<h1>14.3 读取宏 (Read-Macros)</h1>
+7.5 节介绍过宏字符 (macro character)的概念，一个对于 <tt class="docutils literal">read</tt> 有特别意义的字符。每一个这样的字符，都有一个相关联的函数，这函数告诉 <tt class="docutils literal">read</tt> 当遇到这个字符时该怎么处理。你可以变更某个已存在宏字符所相关联的函数，或是自己定义新的宏字符。<br/><br/>
+函数 <tt class="docutils literal"><span class="pre">set-macro-character</span></tt> 提供了一种方式来定义读取宏 (read-macros)。它接受一个字符及一个函数，因此当 <tt class="docutils literal">read</tt> 碰到该字符时，它返回调用传入函数后的结果。<br/><br/>
+Lisp 中最古老的读取宏之一是 <tt class="docutils literal">'</tt> ，即 <tt class="docutils literal">quote</tt> 。我们可以定义成：<br/><br/>
+
+(set-macro-character #\'
+        #'(lambda (stream char)
+                (list (quote quote) (read stream t nil t))))
+</pre>
+当 <tt class="docutils literal">read</tt> 在一个普通的语境下遇到 <tt class="docutils literal">'</tt> 时，它会返回在当前流和字符上调用这个函数的结果。(这个函数忽略了第二个参数，第二个参数永远是引用字符。)所以当 <tt class="docutils literal">read</tt> 看到 <tt class="docutils literal">'a</tt> 时，会返回 <tt class="docutils literal">(quote a)</tt> 。<br/><br/>
+译注: <tt class="docutils literal">read</tt> 函数接受的参数 <tt class="docutils literal">(read &amp;optional stream <span class="pre">eof-error</span> <span class="pre">eof-value</span> recursive)</tt><br/><br/>
+现在我们明白了 <tt class="docutils literal">read</tt> 最后一个参数的用途。它表示无论 <tt class="docutils literal">read</tt> 调用是否在另一个 <tt class="docutils literal">read</tt> 里。传给 <tt class="docutils literal">read</tt> 的参数在几乎所有的读取宏里皆相同：传入参数有流 (stream)；接著是第二个参数， <tt class="docutils literal">t</tt> ，说明了 <tt class="docutils literal">read</tt> 若读入的东西是 end-of-file 时，应不应该报错；第三个参数说明了不报错时要返回什么，因此在这里也就不重要了；而第四个参数 <tt class="docutils literal">t</tt> 说明了这个 <tt class="docutils literal">read</tt> 调用是递归的。<br/><br/>
+(译注：困惑的话可以看看 <a class="reference external" href="https://gist.github.com/3467235">read 的定义</a> )<br/><br/>
+你可以 (通过使用 <tt class="docutils literal"><span class="pre">make-dispatch-macro-character</span></tt> ) 来定义你自己的派发宏字符 (dispatching macro character)，但由于 <tt class="docutils literal">#</tt> 已经是一个宏字符，所以你亦可直接用它。六个 <tt class="docutils literal">#</tt> 打头的组合特别保留给你使用： <tt class="docutils literal">#!</tt> 、 <tt class="docutils literal">#?</tt> 、 <tt class="docutils literal">##[</tt> 、 <tt class="docutils literal">##]</tt> 、 <tt class="docutils literal">#{</tt> 、 <tt class="docutils literal">#}</tt>。<br/><br/>
+你可以通过调用 <tt class="docutils literal"><span class="pre">set-dispatch-macro-character</span></tt> 定义新的派发宏字符组合，与 <tt class="docutils literal"><span class="pre">set-macro-character</span></tt> 类似，除了它接受两个字符参数外。下面的代码定义了 <tt class="docutils literal">#?</tt> 作为返回一个整数列表的读取宏。<br/><br/>
+
+(set-dispatch-macro-character #\# #\?
+  #'(lambda (stream char1 char2)
+      (list 'quote
+            (let ((lst nil))
+              (dotimes (i (+ (read stream t nil t) 1))
+                (push i lst))
+              (nreverse lst)))))
+</pre>
+现在 <tt class="docutils literal"><span class="pre">#?n</span></tt> 会被读取成一个含有整数 <tt class="docutils literal">0</tt> 至 <tt class="docutils literal">n</tt> 的列表。举例来说：<br/><br/>
+
+&gt; #?7
+(1 2 3 4 5 6 7)
+</pre>
+除了简单的宏字符，最常定义的宏字符是列表分隔符 (list delimiters)。另一个保留给用户的字符组是 <tt class="docutils literal">#{</tt> 。以下我们定义了一种更复杂的左括号：<br/><br/>
+
+(set-macro-character #\} (get-macro-character #\)))
+
+(set-dispatch-macro-character #\# #\{
+  #'(lambda (stream char1 char2)
+      (let ((accum nil)
+            (pair (read-delimited-list #\} stream t)))
+        (do ((i (car pair) (+ i 1)))
+            ((&gt; i (cadr pair))
+             (list 'quote (nreverse accum)))
+          (push i accum)))))
+</pre>
+这定义了一个这样形式 <tt class="docutils literal">#{x y}</tt> 的表达式，使得这样的表达式被读取为所有介于 <tt class="docutils literal">x</tt> 与 <tt class="docutils literal">y</tt> 之间的整数列表，包含 <tt class="docutils literal">x</tt> 与 <tt class="docutils literal">y</tt> ：<br/><br/>
+
+&gt; #{2 7}
+(2 3 4 4 5 6 7)
+</pre>
+函数 <tt class="docutils literal"><span class="pre">read-delimited-list</span></tt> 正是为了这样的读取宏而生的。它的第一个参数是被视为列表结束的字符。为了使 <tt class="docutils literal">}</tt> 被识别为分隔符，必须先给它这个角色，所以程序在开始的地方调用了 <tt class="docutils literal"><span class="pre">set-macro-character</span></tt> 。<br/><br/>
+如果你想要在定义一个读取宏的文件里使用该读取宏，则读取宏的定义应要包在一个 <tt class="docutils literal"><span class="pre">eval-when</span></tt> 表达式里，来确保它在编译期会被求值。不然它的定义会被编译，但不会被求值，直到编译文件被载入时才会被求值。<br/><br/>
+
+
+<h1>14.4 包 (Packages)</h1>
+一个包是一个将名字映对到符号的 Lisp 对象。当前的包总是存在全局变量 <tt class="docutils literal">*package*</tt> 里。当 Common Lisp 启动时，当前的包会是 <tt class="docutils literal"><span class="pre">*common-lisp-user*</span></tt> ，通常称为用户包 (user package)。函数 <tt class="docutils literal"><span class="pre">package-name</span></tt> 返回包的名字，而 <tt class="docutils literal"><span class="pre">find-package</span></tt> 返回一个给定名称的包:<br/><br/>
+
+&gt; (package-name *package*)
+&quot;COMMON-LISP-USER&quot;
+&gt; (find-package &quot;COMMON-LISP-USER&quot;)
+#&lt;Package &quot;COMMON-LISP-USER&quot; 4CD15E&gt;
+</pre>
+通常一个符号在读入时就被 interned 至当前的包里面了。函数 <tt class="docutils literal"><span class="pre">symbol-package</span></tt> 接受一个符号并返回该符号被 interned 的包。<br/><br/>
+
+(symbol-package 'sym)
+#&lt;Package &quot;COMMON-LISP-USER&quot; 4CD15E&gt;
+</pre>
+有趣的是，这个表达式返回它该返回的值，因为表达式在可以被求值前必须先被读入，而读取这个表达式导致 <tt class="docutils literal">sym</tt> 被 interned。为了之后的用途，让我们给 <tt class="docutils literal">sym</tt> 一个值:<br/><br/>
+
+&gt; (setf sym 99)
+99
+</pre>
+现在我们可以创建及切换至一个新的包：<br/><br/>
+
+&gt; (setf *package* (make-package 'mine
+                                :use '(common-lisp)))
+#&lt;Package &quot;MINE&quot; 63390E&gt;
+</pre>
+现在应该会听到诡异的背景音乐，因为我们来到一个不一样的世界了：
+在这里 <tt class="docutils literal">sym</tt> 不再是本来的 <tt class="docutils literal">sym</tt> 了。<br/><br/>
+
+MINE&gt; sym
+Error: SYM has no value
+</pre>
+为什么会这样？因为上面我们设为 99 的 <tt class="docutils literal">sym</tt> 与 <tt class="docutils literal">mine</tt> 里的 <tt class="docutils literal">sym</tt> 是两个不同的符号。 <a class="footnote-reference" href="#id4" id="id2">[2]</a> 要在用户包之外参照到原来的 <tt class="docutils literal">sym</tt> ，我们必须把包的名字加上两个冒号作为前缀：<br/><br/>
+
+MINE&gt; common-lisp-user::sym
+99
+</pre>
+所以有著相同打印名称的不同符号能够在不同的包内共存。可以有一个 <tt class="docutils literal">sym</tt> 在 <tt class="docutils literal"><span class="pre">common-lisp-user</span></tt> 包，而另一个 <tt class="docutils literal">sym</tt> 在 <tt class="docutils literal">mine</tt> 包，而他们会是不一样的符号。这就是包存在的意义。如果你在分开的包内写你的程序，你大可放心选择函数与变量的名字，而不用担心某人使用了同样的名字。即便是他们使用了同样的名字，也不会是相同的符号。<br/><br/>
+包也提供了信息隐藏的手段。程序应通过函数与变量的名字来参照它们。如果你不让一个名字在你的包之外可见的话，那么另一个包中的代码就无法使用或者修改这个名字所参照的对象。<br/><br/>
+通常使用两个冒号作为包的前缀也是很差的风格。这么做你就违反了包本应提供的模块性。如果你不得不使用一个双冒号来参照到一个符号，这是因为某人根本不想让你用。<br/><br/>
+通常我们应该只参照被输出 ( <em>exported</em> )的符号。如果我们回到用户包里，并输出一个被 interned 的符号，<br/><br/>
+
+MINE&gt; (in-package common-lisp-user)
+#&lt;Package &quot;COMMON-LISP-USER&quot; 4CD15E&gt;
+&gt; (export 'bar)
+T
+&gt; (setf bar 5)
+5
+</pre>
+我们使这个符号对于其它的包是可视的。现在当我们回到 <tt class="docutils literal">mine</tt> ，我们可以仅使用单冒号来参照到 <tt class="docutils literal">bar</tt> ，因为他是一个公开可用的名字：<br/><br/>
+
+&gt; (in-package mine)
+#&lt;Package &quot;MINE&quot; 63390E&gt;
+MINE&gt; common-lisp-user:bar
+5
+</pre>
+通过把 <tt class="docutils literal">bar</tt> 输入 ( <tt class="docutils literal">import</tt> )至 <tt class="docutils literal">mine</tt> 包，我们就能进一步让 <tt class="docutils literal">mine</tt> 和 <tt class="docutils literal">user</tt> 包可以共享 <tt class="docutils literal">bar</tt> 这个符号：<br/><br/>
+
+MINE&gt; (import 'common-lisp-user:bar)
+T
+MINE&gt; bar
+5
+</pre>
+在输入 <tt class="docutils literal">bar</tt> 之后，我们根本不需要用任何包的限定符 (package qualifier)，就能参照它了。这两个包现在共享了同样的符号；不可能会有一个独立的 <tt class="docutils literal">mine:bar</tt> 了。<br/><br/>
+要是已经有一个了怎么办？在这种情况下， <tt class="docutils literal">import</tt> 调用会产生一个错误，如下面我们试著输入 <tt class="docutils literal">sym</tt> 时便知：<br/><br/>
+
+MINE&gt; (import 'common-lisp-user::sym)
+Error: SYM is already present in MINE.
+</pre>
+在此之前，当我们试著在 <tt class="docutils literal">mine</tt> 包里对 <tt class="docutils literal">sym</tt> 进行了一次不成功的求值，我们使 <tt class="docutils literal">sym</tt> 被 interned 至 <tt class="docutils literal">mine</tt> 包里。而因为它没有值，所以产生了一个错误，但输入符号名的后果就是使这个符号被 intern 进这个包。所以现在当我们试著输入 <tt class="docutils literal">sym</tt> 至 <tt class="docutils literal">mine</tt> 包里，已经有一个相同名称的符号了。<br/><br/>
+另一个方法来获得别的包内符号的存取权是使用( <tt class="docutils literal">use</tt> )它：<br/><br/>
+
+MINE&gt; (use-package 'common-lisp-user)
+T
+</pre>
+现在所有由用户包 (译注: common-lisp-user 包）所输出的符号，可以不需要使用任何限定符在 <tt class="docutils literal">mine</tt> 包里使用。(如果 <tt class="docutils literal">sym</tt> 已经被用户包书出了，这个调用也会产生一个错误。)<br/><br/>
+含有自带操作符及变量名字的包叫做 <tt class="docutils literal"><span class="pre">common-lisp</span></tt> 。由于我们将这个包的名字在创建 <tt class="docutils literal">mine</tt> 包时作为 <tt class="docutils literal"><span class="pre">make-package</span></tt> 的 <tt class="docutils literal">:use</tt> 参数，所有的 Common Lisp 自带的名字在 <tt class="docutils literal">mine</tt> 里都是可视的:<br/><br/>
+
+MINE&gt; #'cons
+#&lt;Compiled-Function CONS 462A3E&gt;
+</pre>
+在编译后的代码中, 通常不会像这样在顶层进行包的操作。更常见的是包的调用会包含在源文件里。通常，只要把 <tt class="docutils literal"><span class="pre">in-package</span></tt> 和 <tt class="docutils literal">defpackage</tt> 放在源文件的开头就可以了，正如 137 页所示。<br/><br/>
+这种由包所提供的模块性实际上有点奇怪。我们有不是对象的模块 (modules)，而是名字的模块。<br/><br/>
+每一个使用了 <tt class="docutils literal"><span class="pre">common-lisp</span></tt> 的包，都可以存取 <tt class="docutils literal">cons</tt> ，因为 <tt class="docutils literal"><span class="pre">common-lisp</span></tt> 包里有一个叫这个名字的函数。但这会导致一个名字为 <tt class="docutils literal">cons</tt> 的变量也会在每个使用了 <tt class="docutils literal"><span class="pre">common-lisp</span></tt> 包里是可视的。如果包使你困惑，这就是主要的原因；因为包不是基于对象而是基于名字。<br/><br/>
+
+
+<h1>14.5 Loop 宏 (The Loop Facility)</h1>
+<tt class="docutils literal">loop</tt> 宏最初是设计来帮助无经验的 Lisp 用户来写出迭代的代码。与其撰写 Lisp 代码，你用一种更接近英语的形式来表达你的程序，然后这个形式被翻译成 Lisp。不幸的是， <tt class="docutils literal">loop</tt> 比原先设计者预期的更接近英语：你可以在简单的情况下使用它，而不需了解它是如何工作的，但想在抽象层面上理解它几乎是不可能的。<br/><br/>
+如果你是曾经计画某天要理解 <tt class="docutils literal">loop</tt> 怎么工作的许多 Lisp 程序员之一，有一些好消息与坏消息。好消息是你并不孤单：几乎没有人理解它。坏消息是你永远不会理解它，因为 ANSI 标准实际上并没有给出它行为的正式规范。<br/><br/>
+这个宏唯一的实际定义是它的实现方式，而唯一可以理解它（如果有人可以理解的话）的方法是通过实例。ANSI 标准讨论 <tt class="docutils literal">loop</tt> 的章节大部分由例子组成，而我们将会使用同样的方式来介绍相关的基础概念。<br/><br/>
+第一个关于 <tt class="docutils literal">loop</tt> 宏我们要注意到的是语法 ( <em>syntax</em> )。一个 <tt class="docutils literal">loop</tt> 表达式不是包含子表达式而是子句 (<em>clauses</em>)。這些子句不是由括号分隔出来；而是每种都有一个不同的语法。在这个方面上， <tt class="docutils literal">loop</tt> 与传统的 Algol-like 语言相似。但其它 <tt class="docutils literal">loop</tt> 独特的特性，使得它与 Algol 不同，也就是在 <tt class="docutils literal">loop</tt> 宏里调换子句的顺序与会发生的事情没有太大的关联。<br/><br/>
+一个 <tt class="docutils literal">loop</tt> 表达式的求值分为三个阶段，而一个给定的子句可以替多于一个的阶段贡献代码。这些阶段如下：<br/><br/>
+<ol class="arabic simple">
+<li><em>序幕</em> (<em>Prologue</em>)。 被求值一次来做为迭代过程的序幕。包括了将变量设至它们的初始值。</li>
+<li><em>主体</em> (<em>Body</em>) 每一次迭代时都会被求值。</li>
+<li><em>闭幕</em> (<em>Epilogue</em>) 当迭代结束时被求值。决定了 <tt class="docutils literal">loop</tt> 表达式的返回值（可能返回多个值）。</li>
+</ol>
+我们会看几个 <tt class="docutils literal">loop</tt> 子句的例子，并考虑何种代码会贡献至何个阶段。<br/><br/>
+举例来说，最简单的 <tt class="docutils literal">loop</tt> 表达式，我们可能会看到像是下列的代码：<br/><br/>
+
+&gt; (loop for x from 0 to 9
+        do (princ x))
+0123456789
+NIL
+</pre>
+这个 <tt class="docutils literal">loop</tt> 表达式印出从 <tt class="docutils literal">0</tt> 至 <tt class="docutils literal">9</tt> 的整数，并返回 <tt class="docutils literal">nil</tt> 。第一个子句，<br/><br/>
+<tt class="docutils literal">for x from 0 to 9</tt><br/><br/>
+贡献代码至前两个阶段，导致 <tt class="docutils literal">x</tt> 在序幕中被设为 <tt class="docutils literal">0</tt> ，在主体开头与 <tt class="docutils literal">9</tt> 来做比较，在主体结尾被递增。第二个子句，<br/><br/>
+<tt class="docutils literal">do (princ x)</tt><br/><br/>
+贡献代码给主体。<br/><br/>
+一个更通用的 <tt class="docutils literal">for</tt> 子句说明了起始与更新的形式 (initial and update form)。停止迭代可以被像是 <tt class="docutils literal">while</tt> 或 <tt class="docutils literal">until</tt> 子句来控制。<br/><br/>
+
+&gt; (loop for x = 8 then (/ x 2)
+        until (&lt; x 1)
+        do (princ x))
+8421
+NIL
+</pre>
+你可以使用 <tt class="docutils literal">and</tt> 来创建复合的 <tt class="docutils literal">for</tt> 子句，同时初始及更新两个变量：<br/><br/>
+
+&gt; (loop for x from 1 to 4
+        and y from 1 to 4
+        do (princ (list x y)))
+(1 1)(2 2)(3 3)(4 4)
+NIL
+</pre>
+要不然有多重 <tt class="docutils literal">for</tt> 子句时，变量会被循序更新。<br/><br/>
+另一件在迭代代码通常会做的事是累积某种值。举例来说：<br/><br/>
+
+&gt; (loop for x in '(1 2 3 4)
+        collect (1+ x))
+(2 3 4 5)
+</pre>
+在 <tt class="docutils literal">for</tt> 子句使用 <tt class="docutils literal">in</tt> 而不是 <tt class="docutils literal">from</tt> ，导致变量被设为一个列表的后续元素，而不是连续的整数。<br/><br/>
+在这个情况里， <tt class="docutils literal">collect</tt> 子句贡献代码至三个阶段。在序幕，一個匿名累加器 (anonymous accumulator)設為 <tt class="docutils literal">nil</tt> ；在主体裡， <tt class="docutils literal">(1+ x)</tt> 被累加至這個累加器，而在闭幕时返回累加器的值。<br/><br/>
+这是返回一个特定值的第一个例子。有用来明确指定返回值的子句，但没有这些子句时，一个 <tt class="docutils literal">collect</tt> 子句决定了返回值。所以我们在这里所做的其实是重复了 <tt class="docutils literal">mapcar</tt> 。<br/><br/>
+<tt class="docutils literal">loop</tt> 最常见的用途大概是蒐集调用一个函数数次的结果：<br/><br/>
+
+&gt; (loop for x from 1 to 5
+        collect (random 10))
+(3 8 6 5 0)
+</pre>
+这里我们获得了一个含五个随机数的列表。这跟我们定义过的 <tt class="docutils literal"><span class="pre">map-int</span></tt> 情况类似 (105 页「译注: 6.4 小节。」)。如果我们有了 <tt class="docutils literal">loop</tt> ，为什么还需要 <tt class="docutils literal"><span class="pre">map-int</span></tt> ？另一个人也可以说，如果我们有了 <tt class="docutils literal"><span class="pre">map-int</span></tt> ，为什么还需要 <tt class="docutils literal">loop</tt> ？<br/><br/>
+一个 <tt class="docutils literal">collect</tt> 子句也可以累积值到一个有名字的变量上。下面的函数接受一个数字的列表并返回偶数与奇数列表：<br/><br/>
+
+(defun even/odd (ns)
+  (loop for n in ns
+        if (evenp n)
+           collect n into evens
+           else collect n into odds
+        finally (return (values evens odds))))
+</pre>
+一个 <tt class="docutils literal">finally</tt> 子句贡献代码至闭幕。在这个情况它指定了返回值。<br/><br/>
+一个 <tt class="docutils literal">sum</tt> 子句和一个 <tt class="docutils literal">collect</tt> 子句类似，但 <tt class="docutils literal">sum</tt> 子句累积一个数字，而不是一个列表。要获得 <tt class="docutils literal">1</tt> 至 <tt class="docutils literal">n</tt> 的和，我们可以写：<br/><br/>
+
+(defun sum (n)
+  (loop for x from 1 to n
+        sum x))
+</pre>
+<tt class="docutils literal">loop</tt> 更进一步的细节在附录 D 讨论，从 325 页开始。举个例子，图 14.1 包含了先前章节的两个迭代函数，而图 14.2 演示了将同样的函数翻译成 <tt class="docutils literal">loop</tt> 。<br/><br/>
+
+(defun most (fn lst)
+  (if (null lst)
+      (values nil nil)
+      (let* ((wins (car lst))
+             (max (funcall fn wins)))
+        (dolist (obj (cdr lst))
+          (let ((score (funcall fn obj)))
+            (when (&gt; score max)
+              (setf wins obj
+                    max  score))))
+        (values wins max))))
+
+(defun num-year (n)
+  (if (&lt; n 0)
+      (do* ((y (- yzero 1) (- y 1))
+            (d (- (year-days y)) (- d (year-days y))))
+           ((&lt;= d n) (values y (- n d))))
+      (do* ((y yzero (+ y 1))
+            (prev 0 d)
+            (d (year-days y) (+ d (year-days y))))
+           ((&gt; d n) (values y (- n prev))))))
+</pre>
+<strong>图 14.1 不使用 loop 的迭代函数</strong><br/><br/>
+
+(defun most (fn lst)
+  (if (null lst)
+      (values nil nil)
+      (loop with wins = (car lst)
+            with max = (funcall fn wins)
+            for obj in (cdr lst)
+            for score = (funcall fn obj)
+            when (&gt; score max)
+                 (do (setf wins obj
+                           max score)
+            finally (return (values wins max))))))
+
+(defun num-year (n)
+  (if (&lt; n 0)
+      (loop for y downfrom (- yzero 1)
+            until (&lt;= d n)
+            sum (- (year-days y)) into d
+            finally (return (values (+ y 1) (- n d))))
+      (loop with prev = 0
+            for y from yzero
+            until (&gt; d n)
+            do (setf prev d)
+            sum (year-days y) into d
+            finally (return (values (- y 1)
+                                    (- n prev))))))
+</pre>
+<strong>图 14.2 使用 loop 的迭代函数</strong><br/><br/>
+一个 <tt class="docutils literal">loop</tt> 的子句可以参照到由另一个子句所设置的变量。举例来说，在 <tt class="docutils literal">even/odd</tt> 的定义里面， <tt class="docutils literal">finally</tt> 子句参照到由两个 <tt class="docutils literal">collect</tt> 子句所创建的变量。这些变量之间的关系，是 <tt class="docutils literal">loop</tt> 定义最含糊不清的地方。考虑下列两个表达式：<br/><br/>
+
+(loop for y = 0 then z
+      for x from 1 to 5
+      sum 1 into z
+      finally (return y z))
+
+(loop for x from 1 to 5
+      for y = 0 then z
+      sum 1 into z
+      finally (return y z))
+</pre>
+它们看起来够简单 –– 每一个有四个子句。但它们返回同样的值吗？它们返回的值多少？你若试著在标准中想找答案将徒劳无功。每一个 <tt class="docutils literal">loop</tt> 子句本身是够简单的。但它们组合起来的方式是极为复杂的 –– 而最终，甚至标准里也没有明确定义。<br/><br/>
+由于这类原因，使用 <tt class="docutils literal">loop</tt> 是不推荐的。推荐 <tt class="docutils literal">loop</tt> 的理由，你最多可以说，在像是图 14.2 这般经典的例子中， <tt class="docutils literal">loop</tt> 让代码看起来更容易理解。<br/><br/>
+
+
+<h1>14.6 状况 (Conditions)</h1>
+在 Common Lisp 里，状况 (condition)包括了错误以及其它可能在执行期发生的情况。当一个状况被捕捉时 (signalled)，相应的处理程序 (handler)会被调用。处理错误状况的缺省处理程序通常会调用一个中断循环 (break-loop)。但 Common Lisp 提供了多样的操作符来捕捉及处理错误。要覆写缺省的处理程序，甚至是自己写一个新的处理程序也是有可能的。<br/><br/>
+多数的程序员不会直接处理状况。然而有许多更抽象的操作符使用了状况，而要了解这些操作符，知道背后的原理是很有用的。<br/><br/>
+Common lisp 有数个操作符用来捕捉错误。最基本的是 <tt class="docutils literal">error</tt> 。一个调用它的方法是给入你会给 <tt class="docutils literal">format</tt> 的相同参数：<br/><br/>
+
+&gt; (error &quot;Your report uses ~A as a verb.&quot; 'status)
+Error: Your report uses STATUS as a verb
+                         Options: :abort, :backtrace
+&gt;&gt;
+</pre>
+如上所示，除非这样的状况被处理好了，不然执行就会被打断。<br/><br/>
+用来捕捉错误的更抽象操作符包括了 <tt class="docutils literal">ecase</tt> 、 <tt class="docutils literal"><span class="pre">check-type</span></tt> 以及 <tt class="docutils literal">assert</tt> 。前者与 <tt class="docutils literal">case</tt> 相似，要是没有键值匹配时会捕捉一个错误：<br/><br/>
+
+&gt; (ecase 1 (2 3) (4 5))
+Error: No applicable clause
+                         Options: :abort, :backtrace
+&gt;&gt;
+</pre>
+普通的 <tt class="docutils literal">case</tt> 在没有键值匹配时会返回 <tt class="docutils literal">nil</tt> ，但由于利用这个返回值是很差的编码风格，你或许会在当你没有 <tt class="docutils literal">otherwise</tt> 子句时使用 <tt class="docutils literal">ecase</tt> 。<br/><br/>
+<tt class="docutils literal"><span class="pre">check-type</span></tt> 宏接受一个位置，一个类型名以及一个选择性字串，并在该位置的值不是预期的类型时，捕捉一个可修正的错误 (correctable error)。一个可修正错误的处理程序会给我们一个机会来提供一个新的值：<br/><br/>
+
+&gt; (let ((x '(a b c)))
+                (check-type (car x) integer &quot;an integer&quot;)
+                x)
+Error: The value of (CAR X), A, should be an integer.
+Options: :abort, :backtrace, :continue
+&gt;&gt; :continue
+New value of (CAR X)? 99
+(99 B C)
+&gt;
+</pre>
+在这个例子里， <tt class="docutils literal">(car x)</tt> 被设为我们提供的新值，并重新执行，返回了要是 <tt class="docutils literal">(car x)</tt> 本来就包含我们所提供的值所会返回的结果。<br/><br/>
+这个宏是用更通用的 <tt class="docutils literal">assert</tt> 所定义的， <tt class="docutils literal">assert</tt> 接受一个测试表达式以及一个有著一个或多个位置的列表，办随著你可能传给 <tt class="docutils literal">error</tt> 的参数：<br/><br/>
+
+&gt; (let ((sandwich '(ham on rye)))
+    (assert (eql (car sandwich) 'chicken)
+            ((car sandwich))
+            &quot;I wanted a ~A sandwich.&quot; 'chicken)
+    sandwich)
+Error: I wanted a CHICKEN sandwich.
+Options: :abort, :backtrace, :continue
+&gt;&gt; :continue
+New value of (CAR SANDWICH)? 'chicken
+(CHICKEN ON RYE)
+</pre>
+要建立新的处理程序也是可能的，但大多数程序员只会间接的利用这个可能性，通过使用像是 <tt class="docutils literal"><span class="pre">ignore-errors</span></tt> 的宏。如果它的参数没产生错误时像在 <tt class="docutils literal">progn</tt> 里求值一样，但要是在求值过程中，不管什么参数报错，执行是不会被打断的。取而代之的是， <tt class="docutils literal"><span class="pre">ignore-errors</span></tt> 表达式会直接返回两个值： <tt class="docutils literal">nil</tt> 以及捕捉到的状况。<br/><br/>
+举例来说，如果在某个时候，你想要用户能够输入一个表达式，但你不想要在输入是语法上不合时中断执行，你可以这样写：<br/><br/>
+
+(defun user-input (prompt)
+  (format t prompt)
+  (let ((str (read-line)))
+    (or (ignore-errors (read-from-string str))
+        nil)))
+</pre>
+若输入包含语法错误时，这个函数仅返回 <tt class="docutils literal">nil</tt> :<br/><br/>
+
+&gt; (user-input &quot;Please type an expression&quot;)
+Please type an expression&gt; #%&#64;#+!!
+NIL
+</pre>
+脚注<br/><br/>
+<table class="docutils footnote" frame="void" id="id3" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>虽然标准没有提到这件事，你可以假定 <tt class="docutils literal">and</tt> 以及 <tt class="docutils literal">or</tt> 类型标示符仅考虑它们所要考虑的参数，与 <tt class="docutils literal">or</tt> 及 <tt class="docutils literal">and</tt> 宏类似。</td></tr>
+</tbody>
+</table>
+<table class="docutils footnote" frame="void" id="id4" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id2">[2]</a></td><td>某些 Common Lisp 实现，当我们不在用户包下时，会在顶层提示符前打印包的名字。</td></tr>
+</tbody>
+</table>

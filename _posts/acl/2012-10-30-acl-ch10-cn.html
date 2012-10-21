@@ -1,0 +1,495 @@
+---
+layout: post
+title : "第10章--宏"
+category : acl
+tags : [acl]
+---
+{% include JB/setup %}
+
+Lisp 代码是由 Lisp 对象的列表来表示。2.3 节宣称这让 Lisp 可以写出<strong>可自己写程序的程序</strong>。本章将示范如何跨越表达式与代码的界线。<br/><br/>
+
+<h1>10.1 求值 (Eval)</h1>
+如何产生表达式是很直观的：调用 <tt class="docutils literal">list</tt> 即可。我们没有考虑到的是，如何使 Lisp 将列表视为代码。这之间缺少的一環是函数 <tt class="docutils literal">eval</tt> ，它接受一个表达式，将其求值，然後返回它的值:<br/><br/>
+
+&gt; (eval '(+ 1 2 3))
+6
+&gt; (eval '(format t &quot;Hello&quot;))
+Hello
+NIL
+</pre>
+如果这看起很熟悉的话，这是应该的。这就是我们一直交谈的那个 <tt class="docutils literal">eval</tt> 。下面这个函数实现了与顶层非常相似的东西:<br/><br/>
+
+(defun our-toplevel ()
+  (do ()
+      (nil)
+    (format t &quot;~%&gt; &quot;)
+    (print (eval (read)))))
+</pre>
+也是因为这个原因，顶层也称为<strong>读取–求值–打印循环</strong> (read-eval-print loop, REPL)。<br/><br/>
+调用 <tt class="docutils literal">eval</tt> 是跨越代码与列表界线的一种方法。但它不是一个好方法:<br/><br/>
+<ol class="arabic simple">
+<li>它的效率低下： <tt class="docutils literal">eval</tt> 处理的是原始列表 (raw list)，要不当下编译它，或是用直译器求值。两种方法都比执行编译过的代码来得慢许多。</li>
+<li>表达式在没有词法语境 (lexical context)的情况下被求值。举例来说，如果你在一个 <tt class="docutils literal">let</tt> 里调用 <tt class="docutils literal">eval</tt> ，传给 <tt class="docutils literal">eval</tt> 的表达式将无法参照由 <tt class="docutils literal">let</tt> 所设置的变量。</li>
+</ol>
+有许多更好的方法 (下一节叙述)来利用产生代码的这个可能性。当然 <tt class="docutils literal">eval</tt> 也是有用的，唯一合法的用途像是在顶层循环使用它。<br/><br/>
+对於程序员来说， <tt class="docutils literal">eval</tt> 的主要价值大概是作为 Lisp 的概念模型。我们可以想像 Lisp 是由一个长的 <tt class="docutils literal">cond</tt> 表达式定义而成:<br/><br/>
+
+(defun eval (expr env)
+  (cond ...
+        ((eql (car expr) 'quote) (cdr expr))
+        ...
+        (t (apply (symbol-function (car expr))
+                  (mapcar #'(lambda (x)
+                              (eval x env))
+                          (cdr expr))))))
+</pre>
+许多表达式由预设子句 (default clause)来处理，预设子句获得 <tt class="docutils literal">car</tt> 所参照的函数，将 <tt class="docutils literal">cdr</tt> 所有的参数求值，并返回将前者应用至後者的结果。 <a class="footnote-reference" href="#id5" id="id1">[1]</a><br/><br/>
+但是像 <tt class="docutils literal">(quote x)</tt> 那样的句子就不能用这样的方式来处理，因为 <tt class="docutils literal">quote</tt> 就是为了防止它的参数被求值而存在的。所以我们需要给 <tt class="docutils literal">quote</tt> 写一个特别的子句。这也是为什麽本质上将其称为特殊操作符 (special operator): 一个需要被实现为 <tt class="docutils literal">eval</tt> 的一个特殊情况的操作符。<br/><br/>
+函数 <tt class="docutils literal">coerce</tt> 与 <tt class="docutils literal">compile</tt> 提供了一个类似的桥梁，让你把列表转成代码。你可以 <tt class="docutils literal">coerce</tt> 一个 lambda 表达式，使其成为函数，<br/><br/>
+
+&gt; (coerce '(lambda (x) x) 'function)
+#&lt;Interpreted-Function BF9D96&gt;
+</pre>
+而如果你将 <tt class="docutils literal">nil</tt> 作为第一个参数传给 <tt class="docutils literal">compile</tt> ，它会编译作为第二个参数传入的 lambda 表达式。<br/><br/>
+
+&gt; (compile nil '(lambda (x) (+ x 2)))
+#&lt;Compiled-Function BF55BE&gt;
+NIL
+NIL
+</pre>
+由於 <tt class="docutils literal">coerce</tt> 与 <tt class="docutils literal">compile</tt> 可接受列表作为参数，一个程序可以在动态执行时 (on the fly)构造新函数。但与调用 <tt class="docutils literal">eval</tt> 比起来，这不是一个从根本解决的办法，并且需抱有同样的疑虑来检视这两个函数。<br/><br/>
+函数 <tt class="docutils literal">eval</tt> , <tt class="docutils literal">coerce</tt> 与 <tt class="docutils literal">compile</tt> 的麻烦不是它们跨越了代码与列表之间的界线，而是它们在执行期做这件事。跨越界线的代价昂贵。大多数情况下，在编译期做这件事是没问题的，当你的程序执行时，几乎不用成本。下一节会示范如何办到这件事。<br/><br/>
+
+
+<h1>10.2 宏 (Macros)</h1>
+写出能写程序的程序的最普遍方法是通过定义宏。<em>宏</em>是通过转换 (transformation)而实现的操作符。你通过说明你一个调用应该要翻译成什麽，来定义一个宏。这个翻译称为宏展开 (macro-expansion)，宏展开由编译器自动完成。所以你的宏所产生的代码，会变成程序的一个部分，就像你自己输入的程序一样。<br/><br/>
+宏通常藉由调用 <tt class="docutils literal">defmacro</tt> 来定义。一个 <tt class="docutils literal">defmacro</tt> 看起来很像 <tt class="docutils literal">defun</tt> 。但是与其定义一个函数调用应该产生的值，它定义了该怎麽翻译出一个函数调用。举例来说，一个将其参数设为 <tt class="docutils literal">nil</tt> 的宏可以定义成如下:<br/><br/>
+
+(defmacro nil! (x)
+  (list 'setf x nil))
+</pre>
+这定义了一个新的操作符，称为 <tt class="docutils literal">nil!</tt> ，它接受一个参数。一个这样形式 <tt class="docutils literal">(nil! a)</tt> 的调用，会在求值或编译前，被翻译成 <tt class="docutils literal">(setf a nil)</tt> 。所以如果我们输入 <tt class="docutils literal">(nil! x)</tt> 至顶层，<br/><br/>
+
+&gt; (nil! x)
+NIL
+&gt; x
+NIL
+</pre>
+完全等同於输入表达式 <tt class="docutils literal">(setf x nil)</tt> 。<br/><br/>
+要测试一个函数，我们调用它，但要测试一个宏，我们看它的展开式 (expansion)。<br/><br/>
+函数 <tt class="docutils literal"><span class="pre">macropexpand-1</span></tt> 接受一个宏调用，并产生它的展开式:<br/><br/>
+
+&gt; (macropexpand-1 '(nil! x))
+(SETF X NIL)
+T
+</pre>
+一个宏调用可以展开成另一个宏调用。当编译器（或顶层）遇到一个宏调用时，它持续展开它，直到不可展开为止。<br/><br/>
+理解宏的秘密是理解它们是如何被实现的。在台面底下，它们只是转换成表达式的函数。举例来说，如果你传入这个形式 <tt class="docutils literal">(nil! a)</tt> 的表达式给这个函数<br/><br/>
+
+(lambda (expr)
+  (apply #'(lambda (x) (list 'setf x nil))
+         (cdr expr)))
+</pre>
+它会返回 <tt class="docutils literal">(setf a nil)</tt> 。当你使用 <tt class="docutils literal">defmacro</tt> ，你定义一个类似这样的函数。 <tt class="docutils literal"><span class="pre">macroexpand-1</span></tt> 全部所做的事情是，当它看到一个表达式的 <tt class="docutils literal">car</tt> 是宏时，将表达式传给对应的函数。<br/><br/>
+
+
+<h1>10.3 反引号 (Backquote)</h1>
+反引号读取宏 (read-macro)使得从模版 (templates)建构列表变得有可能。反引号广泛使用在宏定义中。一个平常的引用是键盘上的右引号 (apostrophe)，然而一个反引号是一个左引号。(译注: open quote 左引号，closed quote 右引号)。它称作“反引号”是因为它看起来像是反过来的引号 (titled backwards)。<br/><br/>
+(译注: 反引号是键盘左上方数字 1 左边那个: <tt class="docutils literal">`</tt> ，而引号是 enter 左边那个 <tt class="docutils literal">'</tt>)<br/><br/>
+一个反引号单独使用时，等於普通的引号:<br/><br/>
+
+&gt; `(a b c)
+(A B C)
+</pre>
+和普通引号一样，单一个反引号保护其参数被求值。<br/><br/>
+反引号的优点是，在一个反引号表达式里，你可以使用 <tt class="docutils literal">,</tt> (逗号)与 <tt class="docutils literal">,&#64;</tt> (comma-at)来重启求值。如果你在反引号表达式里，在某个东西前面加逗号，则它会被求值。所以我们可以使用反引号与逗号来建构列表模版:<br/><br/>
+
+&gt; (setf a 1 b 2)
+2
+&gt; `(a is ,a and b is ,b)
+(A IS 1 AND B IS 2)
+</pre>
+通过使用反引号取代调用 <tt class="docutils literal">list</tt> ，我们可以写出宏会产生出的展开式的宏定义。举例来说 <tt class="docutils literal">nil!</tt> 可以定义为:<br/><br/>
+
+(defmacro nil! (x)
+  `(setf ,x nil))
+</pre>
+Comma-at 与逗号相似，但将其(本来应该是列表的)参数扒开。将列表的元素插入模版来取代列表。<br/><br/>
+
+&gt; (setf lst '(a b c))
+(A B C)
+&gt; `(lst is ,lst)
+(LST IS (A B C))
+&gt; `(its elements are ,&#64;lst)
+(ITS ELEMENTS ARE A B C)
+</pre>
+Comma-at 在宏里很有用，举例来说，在用剩馀参数 (rest parameters)表示代码主体的宏。假设我们想要一个 <tt class="docutils literal">while</tt> 宏，只要初始测试表达式为真，对其主体求值:<br/><br/>
+
+&gt; (let ((x 0))
+    (while (&lt; x 10)
+       (princ x)
+       (incf x)))
+0123456789
+NIL
+</pre>
+我们可以通过使用一个剩馀参数 (rest parameter) ，搜集主体的表达式列表，来定义一个这样的宏，接着使用 comma-at 来扒开这个列表放至展开式里:<br/><br/>
+
+(defmacro while (test &amp;rest body)
+  `(do ()
+       ((not ,test))
+     ,&#64;body))
+</pre>
+
+
+<h1>10.4 示例：快速排序法(Example: Quicksort)</h1>
+图 10.1 包含了重度依赖宏的一个示例函数 –– 一个使用快速排序演算法 <a class="reference external" href="http://ansi-common-lisp.readthedocs.org/en/latest/zhCN/notes-cn.html#notes-164">λ</a> 来排序向量的函数。这个函数的工作方式如下:<br/><br/>
+
+(defun quicksort (vec l r)
+  (let ((i l)
+        (j r)
+        (p (svref vec (round (+ l r) 2))))    ; 1
+    (while (&lt;= i j)                           ; 2
+      (while (&lt; (svref vec i) p) (incf i))
+      (while (&gt; (svref vec j) p) (decf j))
+      (when (&lt;= i j)
+        (rotatef (svref vec i) (svref vec j))
+        (incf i)
+        (decf j)))
+    (if (&gt;= (- j l) 1) (quicksort vec l j))    ; 3
+    (if (&gt;= (- r i) 1) (quicksort vec i r)))
+  vec)
+</pre>
+<strong>图 10.1 快速排序。</strong><br/><br/>
+<ol class="arabic simple">
+<li>开始你通过选择某个元素作为主键 ( <em>pivot</em> )。许多实现选择要被排序的序列中间元素。</li>
+<li>接着你分割 (partition)向量，持续交换元素，直到所有主键左边的元素小於主键，右边的元素大於主键。</li>
+<li>最後，如果左右分割之一有两个或更多元素时，你递归地应用这个算法至向量的那些分割上。</li>
+</ol>
+每一次递归时，分割越变越小，直到向量完整排序为止。<br/><br/>
+在图 10.1 的实现里，接受一个向量以及标记欲排序范围的两个整数。这个范围当下的中间元素被选为主键 ( <tt class="docutils literal">p</tt> )。接着从左右两端开始产生分割，并将左边太大或右边太小的元素交换过来。(将两个参数传给 <tt class="docutils literal">rotatef</tt> 函数，交换它们的值。)最後，如果一个分割含有多个元素时，用同样的流程来排序它们。<br/><br/>
+除了我们前一节定义的 <tt class="docutils literal">while</tt> 宏之外，图 10.1 也用了内建的 <tt class="docutils literal">when</tt> , <tt class="docutils literal">incf</tt> , <tt class="docutils literal">decf</tt> 以及 <tt class="docutils literal">rotatef</tt> 宏。使用这些宏使程序看起来更加简洁与清晰。<br/><br/>
+
+
+<h1>10.5 设计宏 (Macro Design)</h1>
+撰写宏是一种独特的程序设计，它有着独一无二的目标与问题。能够改变编译器所看到的东西，就像是能够重写它一样。所以当你开始撰写宏时，你需要像语言设计者一样思考。<br/><br/>
+本节快速给出宏所牵涉问题的概要，以及解决它们的技巧。作为一个例子，我们会定义一个称为       <tt class="docutils literal">ntimes</tt> 的宏，它接受一个数字 <em>n</em> 并对其主体求值 <em>n</em> 次。<br/><br/>
+
+&gt; (ntimes 10
+    (princ &quot;.&quot;))
+..........
+NIL
+</pre>
+下面是一个不正确的 <tt class="docutils literal">ntimes</tt> 定义，说明了宏设计中的某些议题:<br/><br/>
+
+(defmacro ntimes (n &amp;rest body)
+  `(do ((x 0 (+ x 1)))
+       ((&gt;= x ,n))
+     ,&#64;body))
+</pre>
+这个定义第一眼看起来可能没问题。在上面这个情况，它会如预期的工作。但实际上它在两个方面坏掉了。<br/><br/>
+一个宏设计者需要考虑的问题之一是无意的变量捕捉 (inadvertent variable capture)。这发生在当一个在宏展开式里用到的变量，恰巧与展开式即将插入的语境里，有使用同样名字作为变量的情况。不正确的 <tt class="docutils literal">ntimes</tt> 定义创造了一个变量 <tt class="docutils literal">x</tt> 。所以如果这个宏在已经有 <tt class="docutils literal">x</tt> 作为名字的地方被调用时，它可能无法做到我们所预期的:<br/><br/>
+
+&gt; (let ((x 10))
+    (ntimes 5
+       (setf x (+ x 1)))
+    x)
+10
+</pre>
+如果 <tt class="docutils literal">ntimes</tt> 如我们预期般的执行，这个表达式应该会对 <tt class="docutils literal">x</tt> 递增五次，最後返回 <tt class="docutils literal">15</tt> 。但因为宏展开刚好使用 <tt class="docutils literal">x</tt> 作为迭代变量， <tt class="docutils literal">setf</tt> 表达式递增那个 <tt class="docutils literal">x</tt> ，而不是我们要递增的那个。一旦宏调用被展开，前述的展开式变成:<br/><br/>
+
+&gt; (let ((x 10))
+    (do ((x 0 (+ x 1)))
+        ((&gt;= x 5))
+      (setf x (+ x 1)))
+    x)
+</pre>
+最普遍的解法是不要使用任何可能会被捕捉的一般符号。取而代之的我们使用 gensym (8.4 小节)。因为 <tt class="docutils literal">read</tt> 函数 <tt class="docutils literal">intern</tt> 每个它见到的符号，所以在一个程序里，没有可能会有任何符号会 <tt class="docutils literal">eql</tt> gensym。如果我们使用 gensym 而不是 <tt class="docutils literal">x</tt> 来重写 <tt class="docutils literal">ntimes</tt> 的定义，至少对於变量捕捉来说，它是安全的:<br/><br/>
+
+(defmacro ntimes (n &amp;rest body)
+  (let ((g (gensym)))
+    `(do ((,g 0 (+ g 1)))
+         ((&gt;= ,g ,n))
+       ,&#64;body)))
+</pre>
+但这个宏在另一问题上仍有疑虑: 多重求值 (multiple evaluation)。因为第一个参数被直接插入 <tt class="docutils literal">do</tt> 表达式，它会在每次迭代时被求值。当第一个参数是有副作用的表达式，这个错误非常清楚地表现出来:<br/><br/>
+
+&gt; (let ((v 10))
+    (ntimes (setf v (- v 1))
+      (princ &quot;.&quot;)))
+.....
+NIL
+</pre>
+由於 <tt class="docutils literal">v</tt> 一开始是 <tt class="docutils literal">10</tt> ，而 <tt class="docutils literal">setf</tt> 返回其第二个参数的值，应该印出九个句点。实际上它只印出五个。<br/><br/>
+如果我们看看宏调用所展开的表达式，就可以知道为什麽:<br/><br/>
+
+&gt; (let ((v 10))
+    (do ((#:g1 0 (+ #:g1 1)))
+        ((&gt;= #:g1 (setf v (- v 1))))
+      (princ &quot;.&quot;)))
+</pre>
+每次迭代我们不是把迭代变量 (gensym 通常印出前面有 <tt class="docutils literal">#:</tt> 的符号)与 <tt class="docutils literal">9</tt> 比较，而是与每次求值时会递减的表达式比较。这如同每次我们查看地平线时，地平线都越来越近。<br/><br/>
+避免非预期的多重求值的方法是设置一个变量，在任何迭代前将其设为有疑惑的那个表达式。这通常牵扯到另一个 gensym:<br/><br/>
+
+(defmacro ntimes (n &amp;rest body)
+  (let ((g (gensym))
+        (h (gensym)))
+    `(let ((,h ,n))
+       (do ((,g 0 (+ ,g 1)))
+           ((&gt;= ,g ,h))
+         ,&#64;body))))
+</pre>
+终於，这是一个 <tt class="docutils literal">ntimes</tt> 的正确定义。<br/><br/>
+非预期的变量捕捉与多重求值是折磨宏的主要问题，但不只有这些问题而已。有经验後，要避免这样的错误与避免更熟悉的错误一样简单，比如除以零的错误。<br/><br/>
+你的 Common Lisp 实现是一个学习更多有关宏的好地方。藉由调用展开至内建宏，你可以理解它们是怎麽写的。下面是大多数实现对於一个 <tt class="docutils literal">cond</tt> 表达式会产生的展开式:<br/><br/>
+
+&gt; (pprint (macroexpand-1 '(cond (a b)
+                                (c d e)
+                                (t f))))
+(IF A
+    B
+    (IF C
+        (PROGN D E)
+        F))
+</pre>
+函数 <tt class="docutils literal">pprint</tt> 印出像代码一样缩排的表达式，这在检视宏展开式时特别有用。<br/><br/>
+
+
+<h1>10.6 通用化参照 (Generalized Reference)</h1>
+由於一个宏调用可以直接在它出现的地方展开成代码，任何展开为 <tt class="docutils literal">setf</tt> 表达式的宏调用都可以作为 <tt class="docutils literal">setf</tt> 表达式的第一个参数。 举例来说，如果我们定义一个 <tt class="docutils literal">car</tt> 的同义词，<br/><br/>
+
+(defmacro cah (lst) `(car ,lst))
+</pre>
+然後因为一个 <tt class="docutils literal">car</tt> 调用可以是 <tt class="docutils literal">setf</tt> 的第一个参数，而 <tt class="docutils literal">cah</tt> 一样可以:<br/><br/>
+
+&gt; (let ((x (list 'a 'b 'c)))
+    (setf (cah x) 44)
+    x)
+(44 B C)
+</pre>
+撰写一个展开成一个 <tt class="docutils literal">setf</tt> 表达式的宏是另一个问题，是一个比原先看起来更为困难的问题。看起来也许你可以这样实现 <tt class="docutils literal">incf</tt> ，只要<br/><br/>
+
+(defmacro incf (x &amp;optional (y 1)) ; wrong
+  `(setf ,x (+ ,x ,y)))
+</pre>
+但这是行不通的。这两个表达式不相等:<br/><br/>
+
+(setf (car (push 1 lst)) (1+ (car (push 1 lst))))
+
+(incf (car (push 1 lst)))
+</pre>
+如果 <tt class="docutils literal">lst</tt> 是 <tt class="docutils literal">nil</tt> 的话，第二个表达式会设成 <tt class="docutils literal">(2)</tt> ，但第一个表达式会设成 <tt class="docutils literal">(1 2)</tt> 。<br/><br/>
+Common Lisp 提供了 <tt class="docutils literal"><span class="pre">define-modify-macro</span></tt> 作为写出对於 <tt class="docutils literal">setf</tt> 限制类别的宏的一种方法 它接受三个参数: 宏的名字，额外的参数 (隐含第一个参数 <tt class="docutils literal">place</tt>)，以及产生出 <tt class="docutils literal">place</tt> 新数值的函数名。所以我们可以将 <tt class="docutils literal">incf</tt> 定义为<br/><br/>
+(译注: <tt class="docutils literal"><span class="pre">define-modify-macro</span></tt> 的定义可以看 <a class="reference external" href="https://gist.github.com/2958757">这里</a> )<br/><br/>
+
+(define-modify-macro our-incf (&amp;optional (y 1)) +)
+</pre>
+以及另一版 <tt class="docutils literal">push</tt> 將元素推至一个列表的尾端可写为<br/><br/>
+
+(define-modify-macro append1f (val)
+  (lambda (lst val) (append lst (list val))))
+</pre>
+後者会如下工作:<br/><br/>
+
+&gt; (let ((lst '(a b c)))
+    (append1f lst 'd)
+    lst)
+(A B C D)
+</pre>
+顺道一提， <tt class="docutils literal">push</tt> 与 <tt class="docutils literal">pop</tt> 都不能定义为 modify-macros，前者因为 <tt class="docutils literal">place</tt> 不是其第一个参数，而後者因为其返回值不是更改後的对象。<br/><br/>
+
+
+<h1>10.7 示例：实用的宏函数 (Example: Macro Utilities)</h1>
+6.4 节介绍了实用函数 (utility)的概念，一种像是构造 Lisp 的通用操作符。我们可以使用宏来定义不能写作函数的实用函数。我们已经见过几个例子: <tt class="docutils literal">nil!</tt> , <tt class="docutils literal">ntimes</tt> 以及 <tt class="docutils literal">while</tt> ，全部都需要写成宏，因为它们全都需要某种控制参数求值的方法。本节给出更多你可以使用宏写出的多种实用函数。图 10.2 挑选了几个实践中证实值得写的实用函数。<br/><br/>
+
+(defmacro for (var start stop &amp;body body)
+  (let ((gstop (gensym)))
+    `(do ((,var ,start (1+ ,var))
+          (,gstop ,stop))
+         ((&gt; ,var ,gstop))
+       ,&#64;body)))
+
+(defmacro in (obj &amp;rest choices)
+  (let ((insym (gensym)))
+    `(let ((,insym ,obj))
+       (or ,&#64;(mapcar #'(lambda (c) `(eql ,insym ,c))
+                     choices)))))
+
+(defmacro random-choice (&amp;rest exprs)
+  `(case (random ,(length exprs))
+     ,&#64;(let ((key -1))
+         (mapcar #'(lambda (expr)
+                     `(,(incf key) ,expr))
+                 exprs))))
+
+(defmacro avg (&amp;rest args)
+  `(/ (+ ,&#64;args) ,(length args)))
+
+(defmacro with-gensyms (syms &amp;body body)
+  `(let ,(mapcar #'(lambda (s)
+                     `(,s (gensym)))
+                 syms)
+     ,&#64;body))
+
+(defmacro aif (test then &amp;optional else)
+  `(let ((it ,test))
+     (if it ,then ,else)))
+</pre>
+<strong>图 10.2: 实用宏函数</strong><br/><br/>
+第一个 <tt class="docutils literal">for</tt> ，设计上与 <tt class="docutils literal">while</tt> 相似 (164 页，译注: 10.3 节)。它是给需要使用一个绑定至一个值的范围的新变量来对主体求值的循环:<br/><br/>
+
+&gt; (for x 1 8
+          (princ x))
+12345678
+NIL
+</pre>
+这比写出等效的 <tt class="docutils literal">do</tt> 来得省事，<br/><br/>
+
+(do ((x 1 (+ x 1)))
+    ((&gt; x 8))
+  (princ x))
+</pre>
+这非常接近实际的展开式:<br/><br/>
+
+(do ((x 1 (1+ x))
+     (#:g1 8))
+    ((&gt; x #:g1))
+  (princ x))
+</pre>
+宏需要引入一个额外的变量来持有标记范围 (range)结束的值。 上面在例子里的 <tt class="docutils literal">8</tt> 也可是个函数调用，这样我们就不需要求值好几次。额外的变量需要是一个 gensym ，为了避免非预期的变量捕捉。<br/><br/>
+图 10.2 的第二个宏 <tt class="docutils literal">in</tt> ，若其第一个参数 <tt class="docutils literal">eql</tt> 任何自己其他的参数时，返回真。表达式我们可以写成:<br/><br/>
+
+(in (car expr) '+ '- '*)
+</pre>
+我们可以改写成:<br/><br/>
+
+(let ((op (car expr)))
+  (or (eql op '+)
+      (eql op '-)
+      (eql op '*)))
+</pre>
+确实，第一个表达式展开後像是第二个，除了变量 <tt class="docutils literal">op</tt> 被一个 gensym 取代了。<br/><br/>
+下一个例子 <tt class="docutils literal"><span class="pre">random-choice</span></tt> ，随机选取一个参数求值。在 74 页 (译注: 第 4 章的图 4.6)我们需要随机在两者之间选择。 <tt class="docutils literal"><span class="pre">random-choice</span></tt> 宏实现了通用的解法。一个像是这样的调用:<br/><br/>
+
+(random-choice (turn-left) (turn-right))
+</pre>
+会被展开为:<br/><br/>
+
+(case (random 2)
+  (0 (turn-left))
+  (1 (turn-right)))
+</pre>
+下一个宏 <tt class="docutils literal"><span class="pre">with-gensyms</span></tt> 主要预期用在宏主体里。它不寻常，特别是在特定应用中的宏，需要 gensym 几个变量。有了这个宏，与其<br/><br/>
+
+(let ((x (gensym)) (y (gensym)) (z (gensym)))
+        ...)
+</pre>
+我们可以写成<br/><br/>
+
+(with-gensyms (x y z)
+        ...)
+</pre>
+到目前为止，图 10.2 定义的宏，没有一个可以定义成函数。作为一个规则，写成宏是因为你不能将它写成函数。但这个规则有几个例外。有时候你或许想要定义一个操作符来作为宏，好让它在编译期完成它的工作。宏 <tt class="docutils literal">avg</tt> 返回其参数的平均值，<br/><br/>
+
+&gt; (avg 2 4 8)
+14/3
+</pre>
+是一个这种例子的宏。我们可以将 <tt class="docutils literal">avg</tt> 写成函数，<br/><br/>
+
+(defun avg (&amp;rest args)
+  (/ (apply #'+ args) (length args)))
+</pre>
+但它会需要在执行期找出参数的数量。只要我们愿意放弃应用 <tt class="docutils literal">avg</tt> ，为什麽不在编译期调用 <tt class="docutils literal">length</tt> 呢？<br/><br/>
+图 10.2 的最後一个宏是 <tt class="docutils literal">aif</tt> ，它在此作为一个故意变量捕捉的例子。它让我们可以使用变量 <tt class="docutils literal">it</tt> 来参照到一个条件式里的测试参数所返回的值。也就是说，与其写成<br/><br/>
+
+(let ((val (calculate-something)))
+  (if val
+      (1+ val)
+      0))
+</pre>
+我们可以写成<br/><br/>
+
+(aif (calculate-something)
+     (1+ it)
+     0)
+</pre>
+<strong>小心使用</strong> ( <em>Use judiciously</em>)，预期的变量捕捉可以是一个无价的技巧。Common Lisp 本身在多处使用它: 举例来说 <tt class="docutils literal"><span class="pre">next-method-p</span></tt> 与 <tt class="docutils literal"><span class="pre">call-next-method</span></tt> 皆依赖於变量捕捉。<br/><br/>
+像这些宏明确演示了为何要撰写替你写程序的程序。一旦你定义了 <tt class="docutils literal">for</tt> ，你就不需要写整个 <tt class="docutils literal">do</tt> 表达式。值得写一个宏只为了节省打字吗？非常值得。节省打字是程序设计的全部；一个编译器的目的便是替你省下使用机械语言输入程序的时间。而宏允许你将同样的优点带到特定的应用里，就像高阶语言带给程序语言一般。通过审慎的使用宏，你也许可以使你的程序比起原来大幅度地精简，并使程序更显着地容易阅读、撰写及维护。<br/><br/>
+如果仍对此怀疑，考虑看看如果你没有使用任何内建宏时，程序看起来会是怎麽样。所有宏产生的展开式，你会需要用手产生。你也可以将这个问题用在另一方面。当你在撰写一个程序时，扪心自问，我需要撰写宏展开式吗？如果是的话，宏所产生的展开式就是你需要写的东西。<br/><br/>
+
+
+<h1>10.8 源自 Li​​sp (On Lisp)</h1>
+现在宏已经介绍过了，我们看过更多的 Lisp 是由超乎我们想像的 Lisp 写成。许多不是函数的 Common Lisp 操作符是宏，而他们全部用 Lisp 写成的。只有二十五个 Common Lisp 内建的操作符是特殊操作符。<br/><br/>
+
+System Message: WARNING/2 (<tt class="docutils">../acl-chinese/zhCN/ch10-cn.rst</tt>, line 5); <em><a href="#id4">backlink</a></em><br/><br/>
+Duplicate explicit target name: &quot;λ&quot;.
+<a class="reference external" href="http://www.franz.com/about/bios/jkf.lhtml">John Foderaro</a> 将 Lisp 称为“可程序的程序语言。” <a class="reference external" href="http://ansi-common-lisp.readthedocs.org/en/latest/zhCN/notes-cn.html#notes-173">λ</a> 通过撰写你自己的函数与宏，你将 Lisp 变成任何你想要的语言。 (我们会在 17 章看到这个可能性的图形化示范)无论你的程序适合何种形式，你确信你可以将 Lisp 塑造成适合它的语言。<br/><br/>
+宏是这个灵活性的主要成分之一。它们允许你将 Lisp 变得完全认不出来，但仍然用一种有原则且高效的方法来实作。在 Lisp 社区里，宏是个越来越感兴趣的主题。可以使用宏办到惊人之事是很清楚的，但更确信的是宏背後还有更多需要被探索。如果你想的话，可以通过你来发现。Lisp 永远将进化放在程序员手里。这是它为什麽存活的原因。<br/><br/>
+
+
+<h1>Chapter 10 总结 (Summary)</h1>
+<ol class="arabic simple">
+<li>调用 <tt class="docutils literal">eval</tt> 是让 Lisp 将列表视为代码的一种方法，但这是不必要而且效率低落的。</li>
+<li>你通过叙说一个调用会展开成什麽来定义一个宏。台面底下，宏只是返回表达式的函数。</li>
+<li>一个使用反引号定义的主体看起来像它会产生出的展开式 (expansion)。</li>
+<li>宏设计者需要注意变量捕捉及多重求值。宏可以通过漂亮印出 (pretty-printing)来测试它们的展开式。</li>
+<li>多重求值是大多数展开成 <tt class="docutils literal">setf</tt> 表达式的问题。</li>
+<li>宏比函数来得灵活，可以用来定义许多实用函数。你甚至可以使用变量捕捉来获得好处。</li>
+<li>Lisp 存活的原因是它将进化交给程序员的双手。宏是使其可能的部分原因之一。</li>
+</ol>
+
+
+<h1>Chapter 10 练习 (Exercises)</h1>
+<ol class="arabic simple">
+<li>如果 <tt class="docutils literal">x</tt> 是 <tt class="docutils literal">a</tt> ， <tt class="docutils literal">y</tt> 是 <tt class="docutils literal">b</tt> 以及 <tt class="docutils literal">z</tt> 是 <tt class="docutils literal">(c d)</tt> ，写出反引用表达式仅包含产生下列结果之一的变量:</li>
+</ol>
+
+(a) ((C D) A Z)
+
+(b) (X B C D)
+
+(c) ((C D A) Z)
+</pre>
+<ol class="arabic simple" start="2">
+<li>使用 <tt class="docutils literal">cond</tt> 来定义 <tt class="docutils literal">if</tt> 。</li>
+<li>定义一个宏，接受一个数字 <em>n</em> ，伴随着一个或多个表达式，并返回第 <em>n</em> 个表达式的值:</li>
+</ol>
+
+&gt; (let ((n 2))
+    (nth-expr n (/ 1 0) (+ 1 2) (/ 1 0)))
+3
+</pre>
+<ol class="arabic simple" start="4">
+<li>定义 <tt class="docutils literal">ntimes</tt> (167 页，译注: 10.5 节)使其展开成一个 (区域)递归函数，而不是一个 <tt class="docutils literal">do</tt> 表达式。</li>
+<li>定义一个宏 <tt class="docutils literal"><span class="pre">n-of</span></tt> ，接受一个数字 <em>n</em> 与一个表达式，返回一个 <em>n</em> 个渐进值:</li>
+</ol>
+
+&gt; (let ((i 0) (n 4))
+    (n-of n (incf i)))
+(1 2 3 4)
+</pre>
+<ol class="arabic simple" start="6">
+<li>定义一个宏，接受一变量列表以及一个代码主体，并确保变量在代码主体被求值後恢复 (revert)到原本的数值。</li>
+<li>下面这个 <tt class="docutils literal">push</tt> 的定义哪里错误？</li>
+</ol>
+
+(defmacro push (obj lst)
+  `(setf ,lst (cons ,obj ,lst)))
+
+举出一个不会与实际 push 做一样事情的函数调用例子。
+</pre>
+<ol class="arabic simple" start="8">
+<li>定义一个将其参数翻倍的宏:</li>
+</ol>
+
+&gt; (let ((x 1))
+    (double x)
+    x)
+2
+</pre>
+脚注<br/><br/>
+<table class="docutils footnote" frame="void" id="id5" rules="none">
+<colgroup><col class="label" /><col /></colgroup>
+<tbody valign="top">
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>要真的复制一个 Lisp 的话， <tt class="docutils literal">eval</tt> 会需要接受第二个参数 (这里的 <tt class="docutils literal">env</tt>) 来表示词法环境 (lexical enviroment)。这个模型的 <tt class="docutils literal">eval</tt> 是不正确的，因为它在对参数求值前就取出函数，然而 Common Lisp 故意没有特别指出这两个操作的顺序。</td></tr>
+</tbody>
+</table>
