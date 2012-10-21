@@ -7,9 +7,6 @@ title: PG中文
 <a href="{{ BASE_PATH }}/lists.html">文章列表</a>
 <br/>
 <br/>
-<a href="{{ BASE_PATH }}/acl.html">ANSI Common Lisp</a>
-<br/>
-<br/>
 <a href="{{ BASE_PATH }}/faq.html">FAQs</a>
 <br/>
 <br/>
