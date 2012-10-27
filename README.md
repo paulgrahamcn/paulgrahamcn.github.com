@@ -1,15 +1,18 @@
-# Jekyll-Bootstrap
+---
+layout: page
+title: PG中文
+---
+{% include JB/setup %}
 
-The quickest way to start and publish your Jekyll powered blog. 100% compatible with GitHub pages
-
-## Usage
-
-For all usage and documentation please see: <http://jekyllbootstrap.com>
-
-## Version
-
-0.2.13 - stable and versioned using [semantic versioning](http://semver.org/).
-
-## License
-
-[Creative Commons](http://creativecommons.org/licenses/by-nc-sa/3.0/)
+<a href="{{ BASE_PATH }}/lists.html">文章列表</a>
+<br/>
+<br/>
+<a href="{{ BASE_PATH }}/faq.html">FAQs</a>
+<br/>
+<br/>
+<a href="{{ BASE_PATH }}/hackernews.html">Hacker News</a>
+<br/>
+<br/>
+<a href="{{ BASE_PATH }}/relate.html">其它相关</a>
+<br/>
+<br/>
