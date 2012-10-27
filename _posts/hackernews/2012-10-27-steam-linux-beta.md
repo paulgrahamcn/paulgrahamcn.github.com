@@ -16,3 +16,6 @@ tags: [hackernews]
     然而：1，不管怎样，你都应该在Linux下安装Steam！(只要它变为公共的)2，这几天，我看到在虚拟机里的游戏运行的很好。(很失望，不是在VirtualBox里)  
     (我永远也理解不了，为什么人们这么喜欢VS)
 
+
+
+[Steam相关介绍](http://zhuzhonghua.github.com/blog/2012/07/11/dota2-valve-bram-cohen-bt/)
