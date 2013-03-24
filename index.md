@@ -12,6 +12,8 @@ title: PG中文
 <br/>
 <a href="{{ BASE_PATH }}/hackernews.html">Hacker News</a>
 <br/>
+<a href="{{ BASE_PATH }}/acl.html">ANSI Common Lisp</a>
+<br/>
 <br/>
 <a href="{{ BASE_PATH }}/relate.html">其它相关</a>
 <br/>
